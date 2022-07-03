@@ -18,5 +18,5 @@ class Network():
 
         C_curr = C * stem_multiplier
         self.stem = keras.Sequential()
-        self.stem.add(keras.layers.Conv2D(input_shape=input_shape, filters=C_curr, kernel_size=(3,3), padding=1, strides=1))
+        self.stem.add(keras.layers.Conv2D(C_curr, kernel_size=(3,3), padding='same', strides=1, use_bias=False, input_shape=input_shape))
         self.stem.add(keras.layers.BatchNormalization())
