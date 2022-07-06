@@ -12,7 +12,7 @@ def main():
     input_shape = x_train.shape[1:]
     tf.random.set_seed(config.args.seed)
     
-    model = Network(config.args.init_channels, input_shape, 10, 8)
+    model = Network(config.args.init_channels, input_shape, n_classes=10, n_layers=8)
     for cell in model.cells:
         print(cell.name)
 

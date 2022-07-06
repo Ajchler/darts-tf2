@@ -6,7 +6,7 @@ PRIMITIVES = [
     'conv_3x3',
     'dconv_3x3',
     'conv_1x1',
+    'rel_attention',
     'ffn',
-    'global_pool',
     'fc'
 ]

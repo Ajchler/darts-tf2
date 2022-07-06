@@ -1,17 +1,20 @@
 from genotypes import Genotype
 from genotypes import PRIMITIVES
+from operations import *
 import tensorflow as tf
 import tensorflow.keras as keras
 
 class Cell(tf.Module):
-    def __init__(self, reduction):
+    def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev):
         super().__init__()
         self.reduction = reduction
-        #TODO
-        
+        if reduction_prev:
+            self.preprocess0 =
+        else:
+            self.preprocess1
 
 class Network(tf.Module):
-    def __init__(self, C, input_shape, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
+    def __init__(self, C, criterion, input_shape, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
         super(Network, self).__init__()
         self._C = C
         self._input_shape = input_shape
@@ -19,6 +22,7 @@ class Network(tf.Module):
         self._n_layers = n_layers
         self._n_nodes = n_nodes
         self._multiplier = multiplier
+        self._criterion = criterion
 
         C_curr = C * stem_multiplier
         self.stem = keras.Sequential()
@@ -45,3 +49,5 @@ class Network(tf.Module):
         self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
         # using Dense layer from tensorflow as a replacement of nn.Linear()
         self.classifier = tf.keras.layers.Dense(n_classes, activation=None)
+ 
+        #TODO: initialize alphas
