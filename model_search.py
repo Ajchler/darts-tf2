@@ -5,13 +5,14 @@ import tensorflow as tf
 import tensorflow.keras as keras
 
 class Cell(tf.Module):
-    def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev):
+    def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, input_shape):
         super().__init__()
         self.reduction = reduction
         if reduction_prev:
-            self.preprocess0 =
+            self.preprocess0 = FactorizedReduce(C_curr, input_shape)
         else:
-            self.preprocess1
+            self.preprocess0 = ReLUConvBN(input_shape, C_curr, 1, 1, 'valid')
+        self.preprocess1 = ReLUConvBN(input_shape, C_curr, 1, 1, 'valid')
 
 class Network(tf.Module):
     def __init__(self, C, criterion, input_shape, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
@@ -28,11 +29,11 @@ class Network(tf.Module):
         self.stem = keras.Sequential()
         self.stem.add(keras.layers.Conv2D(C_curr, kernel_size=(3,3), padding='same', strides=1, use_bias=False, input_shape=input_shape))
         self.stem.add(keras.layers.BatchNormalization())
-        
+
         C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
         
         self.cells = []
-        reduction_previous = False
+        reduction_prev = False
         for i in range(n_layers):
             if i in [n_layers // 3, 2 * n_layers // 3]:
                 C_curr *= 2
@@ -40,8 +41,8 @@ class Network(tf.Module):
             else:
                 reduction = False
                 
-            cell = Cell(reduction)
-            reduction_previous = reduction
+            cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, input_shape)
+            reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * n_nodes
             C_prev_prev, C_prev = C_prev, C_curr_out

@@ -8,13 +8,14 @@ import data_utils
 
 def main():
     config = Config() 
+    tf.random.set_seed(config.args.seed)
+ 
+    # Load data etc
     (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
     input_shape = x_train.shape[1:]
-    tf.random.set_seed(config.args.seed)
-    
-    model = Network(config.args.init_channels, input_shape, n_classes=10, n_layers=8)
-    for cell in model.cells:
-        print(cell.name)
+
+    criterion = keras.losses.CategoricalCrossentropy()    
+    model = Network(config.args.init_channels, criterion, input_shape, n_classes=10, n_layers=8)
 
 if __name__ == "__main__":
     main()
