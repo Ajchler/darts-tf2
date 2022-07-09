@@ -1,4 +1,3 @@
-from distutils.command import config
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -10,11 +9,12 @@ def main():
     config = Config() 
     tf.random.set_seed(config.args.seed)
  
-    # Load data etc
+    # Load data
     (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
     input_shape = x_train.shape[1:]
 
     criterion = keras.losses.CategoricalCrossentropy()    
+    # SUBMODULES ARE STORED in model.submodules
     model = Network(config.args.init_channels, criterion, input_shape, n_classes=10, n_layers=8)
 
 if __name__ == "__main__":

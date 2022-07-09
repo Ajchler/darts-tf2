@@ -4,15 +4,33 @@ from operations import *
 import tensorflow as tf
 import tensorflow.keras as keras
 
+class MixedOp(tf.Module):
+    def __init__(self, C_curr, stride):
+        super().__init__()
+        self._ops = []
+        for prim in PRIMITIVES:
+            self._ops.append(prim)
+
 class Cell(tf.Module):
     def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, input_shape):
         super().__init__()
         self.reduction = reduction
+        self._n_nodes = n_nodes
+        self._multiplier = multiplier
         if reduction_prev:
             self.preprocess0 = FactorizedReduce(C_curr, input_shape)
         else:
             self.preprocess0 = ReLUConvBN(input_shape, C_curr, 1, 1, 'valid')
         self.preprocess1 = ReLUConvBN(input_shape, C_curr, 1, 1, 'valid')
+
+        self._ops = []
+        self._bns = []
+        for i in range(self._n_nodes):
+            for j in range (i + 2):
+                stride = 2 if reduction and j < 2 else 1
+                self._ops.append(MixedOp(C_curr, stride))
+
+        #TODO: def forward(...):
 
 class Network(tf.Module):
     def __init__(self, C, criterion, input_shape, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
@@ -32,7 +50,7 @@ class Network(tf.Module):
 
         C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
         
-        self.cells = []
+        self.layers = []
         reduction_prev = False
         for i in range(n_layers):
             if i in [n_layers // 3, 2 * n_layers // 3]:
@@ -43,7 +61,7 @@ class Network(tf.Module):
                 
             cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, input_shape)
             reduction_prev = reduction
-            self.cells.append(cell)
+            self.layers.append(cell)
             C_curr_out = C_curr * n_nodes
             C_prev_prev, C_prev = C_prev, C_curr_out
  
