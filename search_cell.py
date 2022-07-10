@@ -13,7 +13,9 @@ def main():
     (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
     input_shape = x_train.shape[1:]
 
-    criterion = keras.losses.CategoricalCrossentropy()    
+    # Questionable if from_logits should be used TODO!
+    criterion = keras.losses.CategoricalCrossentropy(from_logits=True)    
+
     # SUBMODULES ARE STORED in model.submodules
     model = Network(config.args.init_channels, criterion, input_shape, n_classes=10, n_layers=8)
 

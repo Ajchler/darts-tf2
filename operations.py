@@ -2,6 +2,15 @@ from turtle import forward
 import tensorflow as tf
 import tensorflow.keras as keras
 
+OP_DICT = {
+    'none': lambda C, stride: Zero(stride),
+    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3),
+    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1),
+    'dconv_3x3': lambda C, stride: DConv(C, stride, kernel_size=3),
+    'rel_attention': lambda C, stride: RelAttention(C, stride),
+    'ffn': lambda C, stride: FeedForwardNet(C, stride)
+}
+
 class ReLUConvBN(tf.Module):
     def __init__(self, input_shape, C_out, kernel_size, stride, padding):
         super().__init__()
@@ -24,6 +33,6 @@ class FactorizedReduce(tf.Module):
 
     def forward(self, x):
         x = self.relu(x)
-        out = tf.keras.layers.concatenate(axis=1)([self.conv_1(x), self.conv_2(x[:,:,1:,1:])])
+        out = tf.concat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], 1)
         out = self.bn(out)
         return out 
