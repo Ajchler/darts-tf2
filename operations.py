@@ -4,12 +4,22 @@ import tensorflow.keras as keras
 
 OP_DICT = {
     'none': lambda C, stride: Zero(stride),
-    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3),
-    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1),
+    'conv_3x3': lambda C, stride: Conv(C, kernel_size=3, padding='same'),
+    'conv_1x1': lambda C, stride: Conv(C, kernel_size=1, padding='valid'),
     'dconv_3x3': lambda C, stride: DConv(C, stride, kernel_size=3),
     'rel_attention': lambda C, stride: RelAttention(C, stride),
     'ffn': lambda C, stride: FeedForwardNet(C, stride)
 }
+
+class Conv(tf.Module):
+    def __init__(self, C_out, kernel_size, padding):
+        super().__init__()
+        self.op = keras.Sequential()
+        self.op.add(keras.layers.Conv2D(C_out, kernel_size, padding=padding))
+        self.op.add(keras.layers.ReLU())
+
+    def forward(self, x):
+        return self.op(x)
 
 class ReLUConvBN(tf.Module):
     def __init__(self, input_shape, C_out, kernel_size, stride, padding):

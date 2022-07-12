@@ -10,6 +10,7 @@ def main():
     tf.random.set_seed(config.args.seed)
  
     # Load data
+    #TODO: split the data into batches?
     (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
     input_shape = x_train.shape[1:]
 
