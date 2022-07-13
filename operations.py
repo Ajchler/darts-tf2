@@ -6,10 +6,35 @@ OP_DICT = {
     'none': lambda C, stride: Zero(stride),
     'conv_3x3': lambda C, stride: Conv(C, kernel_size=3, padding='same'),
     'conv_1x1': lambda C, stride: Conv(C, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, stride: DConv(C, stride, kernel_size=3),
+    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
     'rel_attention': lambda C, stride: RelAttention(C, stride),
     'ffn': lambda C, stride: FeedForwardNet(C, stride)
 }
+
+class SEBlock(tf.Module):
+    def __init__(self):
+        super().__init__()
+
+class MBConv(tf.Module):
+    def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
+        super().__init__()
+        self._stride = stride
+        self._C_curr = C_curr
+        self._C_out = C_out
+        self._stride = stride
+        self._drop_connect_rate = drop_connect_rate
+
+        self.conv_1 = keras.layers.Conv2D(C_curr * expand_ratio, 1, 1, padding='same')
+        self.bn_1 = keras.layers.BatchNormalization()
+        self.depth_wise_conv = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')
+        self.bn_2 = keras.layers.BatchNormalization()
+        #TODO SEBlock
+        self.conv_2 = keras.layers.Conv2D(C_out, 1, 1, padding='same')
+        self.bn_3 = keras.layers.BatchNormalization()
+
+        # dropout is probably useless since this value will probably never be
+        # used, but in case it was in some of the experiments, it stays for now
+        self.droupout = keras.layers.Dropout(drop_connect_rate)
 
 class Conv(tf.Module):
     def __init__(self, C_out, kernel_size, padding):
@@ -45,4 +70,4 @@ class FactorizedReduce(tf.Module):
         x = self.relu(x)
         out = tf.concat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], 1)
         out = self.bn(out)
-        return out 
+        return out
