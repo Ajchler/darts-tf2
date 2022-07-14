@@ -7,8 +7,16 @@ OP_DICT = {
     'conv_1x1': lambda C, stride: Conv(C, kernel_size=1, padding='valid'),
     'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
     'rel_attention': lambda C, stride: RelAttention(C, stride),
-    'ffn': lambda C, stride: FeedForwardNet(C, stride)
+    'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
 }
+
+class FeedForwardNet(C_curr, C_out, stride):
+    def __init__(self, C_curr, C_out, stride):
+        super().__init__()
+        op = keras.Sequential()
+        op.add(keras.layers.Dense(C_out, activation='relu'))
+        op.add(keras.layers.Dense(C_curr))
+        op.add(keras.layers.MaxPool2D(1, stride, padding='same'))
 
 class Zero(tf.Module):
     def __init__(self, stride):
