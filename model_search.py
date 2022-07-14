@@ -12,7 +12,7 @@ class MixedOp(tf.Module):
             op = OP_DICT[prim](C_curr, stride)
             self._ops.append(op)
 
-    def forward(self, x, weights):
+    def __call__(self, x, weights):
         return sum(w * op(x) for w, op in zip(weights, self._ops))
 
 class Cell(tf.Module):
@@ -34,7 +34,7 @@ class Cell(tf.Module):
                 stride = 2 if reduction and j < 2 else 1
                 self._ops.append(MixedOp(C_curr, stride))
 
-    def forward(self, s0, s1, weights):
+    def __call__(self, s0, s1, weights):
         s0 = self.preprocess0(s0)
         s1 = self.preprocess1(s1)
 
@@ -64,7 +64,7 @@ class Network(tf.Module):
         self.stem.add(keras.layers.BatchNormalization())
 
         C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
-        
+
         self.cells = []
         reduction_prev = False
         for i in range(n_layers):
@@ -73,13 +73,13 @@ class Network(tf.Module):
                 reduction = True
             else:
                 reduction = False
-                
+
             cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, input_shape)
             reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * n_nodes
             C_prev_prev, C_prev = C_prev, C_curr_out
- 
+
         self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
         # using Dense layer from tensorflow as a replacement of nn.Linear()
         self.classifier = tf.keras.layers.Dense(n_classes, activation=None)
@@ -90,7 +90,7 @@ class Network(tf.Module):
     #        x.data.copy_(y.data)
     #    return new_model
 
-    def forward(self, input):
+    def __call__(self, input):
         s0 = s1 = self.stem(input)
         for i, cell in enumerate(self.layers):
             if cell.reduction:
