@@ -158,7 +158,8 @@ def Cell(s0, s1, cells_n, multiplier, C_out, reduction, reduction_prev):
     out=tf.concat(states[-multiplier:], axis=-1)
     return out
 
-def Model(x, y, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
+#def Model(x, y, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
+def Model(x, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
     C_curr = stem_multiplier * C_init
     # stem stages
     s0 = keras.layers.Conv2D(C_curr, (3,3), strides=(1,1), padding='same', activation='relu')(x)
@@ -176,4 +177,5 @@ def Model(x, y, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=
         reduction_prev = reduction
         out = keras.layers.GlobalAveragePooling2D()(s1)
         logits = keras.layers.Dense(classes_n)
-    train_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
+    #train_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
+    return logits

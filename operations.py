@@ -3,9 +3,9 @@ import tensorflow.keras as keras
 
 OP_DICT = {
     'none': lambda x, C, stride: Zero(x, stride),
-    'conv_3x3': lambda x, C, stride: Conv(C, kernel_size=3, padding='same'),
-    'conv_1x1': lambda x, C, stride: Conv(C, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda x, C, stride: MBConv(C, C, stride, kernel_size=3),
+    'conv_3x3': lambda x, C, stride: Conv(x, C, stride, kernel_size=3, padding='same'),
+    'conv_1x1': lambda x, C, stride: Conv(x, C, stride, kernel_size=1, padding='valid'),
+    'dconv_3x3': lambda x, C, stride: MBConv(x, C, C, stride, kernel_size=3),
     #'rel_attention': lambda C, stride: RelAttention(C, stride),
     'ffn': lambda x, C, stride: FeedForwardNet(x, C, stride)
 }
@@ -62,55 +62,78 @@ def SEBlock(x, C, ratio=0.25):
     op = tf.nn.sigmoid(op)
     return x * op
 
-class MBConv(tf.Module):
-    def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
-        super().__init__()
-        self._stride = stride
-        self._C_curr = C_curr
-        self._C_out = C_out
-        self._stride = stride
-        self._drop_connect_rate = drop_connect_rate
+#class MBConv(tf.Module):
+#    def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
+#        super().__init__()
+#        self._stride = stride
+#        self._C_curr = C_curr
+#        self._C_out = C_out
+#        self._stride = stride
+#        self._drop_connect_rate = drop_connect_rate
+#
+#        self.conv_1 = keras.layers.Conv2D(C_curr * expand_ratio, 1, 1, padding='same')
+#        self.bn_1 = keras.layers.BatchNormalization()
+#        self.depth_wise_conv = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')
+#        self.bn_2 = keras.layers.BatchNormalization()
+#        self.se_block = SEBlock(C_curr * expand_ratio)
+#        self.conv_2 = keras.layers.Conv2D(C_out, 1, 1, padding='same')
+#        self.bn_3 = keras.layers.BatchNormalization()
+#
+#        # dropout is probably useless since this value will probably never be
+#        # used, but in case it was in some of the experiments, it stays for now
+#        self.droupout = keras.layers.Dropout(drop_connect_rate)
+#
+#    def __call__(self, x):
+#        out = self.conv_1(x)
+#        out = self.bn_1(out)
+#        out = tf.nn.gelu(out, approximate=True)
+#        out = out * tf.sigmoid(out)
+#        out = self.depth_wise_conv(out)
+#        out = self.bn2(out)
+#        out = tf.nn.gelu(out, approximate=True)
+#        out = self.se_block(out)
+#        out = out * tf.sigmoid(out)
+#        out = self.conv_2(out)
+#        #out = self.bn_3(out)
+#        #out = tf.nn.gelu(out, approximate=True)
+#        if self._stride == 1 and self._C_curr == self._C_out:
+#            if self._drop_connect_rate:
+#                out = self.droupout(out)
+#            out = tf.keras.layers.add([out, x])
+#        return out
 
-        self.conv_1 = keras.layers.Conv2D(C_curr * expand_ratio, 1, 1, padding='same')
-        self.bn_1 = keras.layers.BatchNormalization()
-        self.depth_wise_conv = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')
-        self.bn_2 = keras.layers.BatchNormalization()
-        self.se_block = SEBlock(C_curr * expand_ratio)
-        self.conv_2 = keras.layers.Conv2D(C_out, 1, 1, padding='same')
-        self.bn_3 = keras.layers.BatchNormalization()
+def MBConv(x, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
+    op = keras.layers.Conv2D(C_curr * expand_ratio, [1,1], [1,1], padding='same')(x)
+    op = keras.layers.BatchNormalization()(op)
+    op = keras.activations.gelu(op, approximate=True)
+    op = op * tf.sigmoid(op)
+    op = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')(op)
+    op = keras.layers.BatchNormalization()(op)
+    op = keras.activations.gelu(op, approximate=True)
+    op = SEBlock(op, C_curr * expand_ratio)
+    op = op * tf.sigmoid(op)
+    op = keras.layers.Conv2D(C_out, [1,1], [1,1], padding='same')(op)
+    if stride == 1 and C_curr == C_out:
+        if drop_connect_rate:
+            op = keras.layers.Dropout(drop_connect_rate)(op)
+        op = keras.layers.Add([op, x])
+    return op
 
-        # dropout is probably useless since this value will probably never be
-        # used, but in case it was in some of the experiments, it stays for now
-        self.droupout = keras.layers.Dropout(drop_connect_rate)
 
-    def __call__(self, x):
-        out = self.conv_1(x)
-        out = self.bn_1(out)
-        out = tf.nn.gelu(out, approximate=True)
-        out = out * tf.sigmoid(out)
-        out = self.depth_wise_conv(out)
-        out = self.bn2(out)
-        out = tf.nn.gelu(out, approximate=True)
-        out = self.se_block(out)
-        out = out * tf.sigmoid(out)
-        out = self.conv_2(out)
-        #out = self.bn_3(out)
-        #out = tf.nn.gelu(out, approximate=True)
-        if self._stride == 1 and self._C_curr == self._C_out:
-            if self._drop_connect_rate:
-                out = self.droupout(out)
-            out = tf.keras.layers.add([out, x])
-        return out
+#class Conv(tf.Module):
+#    def __init__(self, C_out, kernel_size, padding):
+#        super().__init__()
+#        self.op = keras.Sequential()
+#        self.op.add(keras.layers.Conv2D(C_out, kernel_size, padding=padding))
+#        self.op.add(keras.layers.ReLU())
+#
+#    def __call__(self, x):
+#        return self.op(x)
 
-class Conv(tf.Module):
-    def __init__(self, C_out, kernel_size, padding):
-        super().__init__()
-        self.op = keras.Sequential()
-        self.op.add(keras.layers.Conv2D(C_out, kernel_size, padding=padding))
-        self.op.add(keras.layers.ReLU())
-
-    def __call__(self, x):
-        return self.op(x)
+def Conv(x, C, stride, kernel_size, padding):
+    op = keras.layers.Conv2D(C, kernel_size, strides=stride, padding=padding)(x)
+    op = keras.layers.ReLU()(op)
+    return op
 
 #class ReLUConvBN(tf.Module):
 #    def __init__(self, input_shape, C_out, kernel_size, stride, padding):
