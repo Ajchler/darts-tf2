@@ -17,7 +17,7 @@ OP_DICT = {
 def FeedForwardNet(x, C, stride):
     op = keras.layers.Dense(C, activation='relu')(x)
     op = keras.layers.Dense(C)(op)
-    op = keras.layers.MaxPool2D([1,1], stride, padding='same')
+    op = keras.layers.MaxPool2D([1,1], stride, padding='same')(op)
     return op
 
 #class FeedForwardNet(keras.layers.Layer):
