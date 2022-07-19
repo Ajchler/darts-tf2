@@ -176,6 +176,6 @@ def Model(x, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, 
         s0, s1 = s1, Cell(s0, s1, cells_n, multiplier, C_curr, reduction, reduction_prev)
         reduction_prev = reduction
         out = keras.layers.GlobalAveragePooling2D()(s1)
-        logits = keras.layers.Dense(classes_n)
+        logits = keras.layers.Dense(classes_n)(out)
     #train_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y, logits=logits))
     return logits

@@ -15,6 +15,8 @@ def main():
     input_shape = x_train.shape[1:]
     inputs = keras.Input(input_shape)
     output = Model(inputs, True, config.args.init_channels, 10, 8)
+    model = keras.Model(inputs=inputs, outputs=output, name='darts4coatnet')
+    model.summary()
 
 if __name__ == "__main__":
     main()
