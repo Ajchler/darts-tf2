@@ -158,14 +158,14 @@ def Cell(s0, s1, cells_n, multiplier, C_out, reduction, reduction_prev):
     out=tf.concat(states[-multiplier:], axis=-1)
     return out
 
-#def Model(x, y, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
-def Model(x, is_training, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
+#def Model(x, y, TODO: this might not be needed: is_training (used in BatchNormalization), C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
+def Model(x, C_init, classes_n, layers_n, cells_n=4, multiplier=4, stem_multiplier=3, name='Model'):
     C_curr = stem_multiplier * C_init
     # stem stages
     s0 = keras.layers.Conv2D(C_curr, (3,3), strides=(1,1), padding='same', activation='relu')(x)
-    s0 = keras.layers.BatchNormalization(trainable=is_training)(s0)
+    s0 = keras.layers.BatchNormalization()(s0)
     s1 = keras.layers.Conv2D(C_curr, (3,3), strides=(1,1), padding='same', activation='relu')(x)
-    s1 = keras.layers.BatchNormalization(trainable=is_training)(s1)
+    s1 = keras.layers.BatchNormalization()(s1)
     reduction_prev = False
     for i in range(layers_n):
         if i in [layers_n // 3, 2 * layers_n // 3]:
