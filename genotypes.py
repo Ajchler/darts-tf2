@@ -7,6 +7,6 @@ PRIMITIVES = [
     'conv_3x3',
     'dconv_3x3',
     'conv_1x1',
-    #'rel_attention',
+    'rel_attention',
     'ffn'
 ]

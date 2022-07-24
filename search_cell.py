@@ -22,12 +22,6 @@ def main():
     val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))# validation dataset
     val_dataset = val_dataset.shuffle(buffer_size=100).batch(config.args.batch_size)
 
-    #model = keras.Model(inputs=inputs, outputs=output, name='darts4coatnet')
-    ## TODO: weight decay is missing, haven't found a way to add global weight decay yet
-    #model.compile(optimizer=keras.optimizers.SGD(learning_rate=config.args.learning_rate,
-    #                                             momentum=config.args.momentum),
-    #              loss=keras.losses.CategoricalCrossentropy(from_logits=True))
-
     optimizer = keras.optimizers.SGD(learning_rate=config.args.learning_rate, momentum=config.args.momentum)
     loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
