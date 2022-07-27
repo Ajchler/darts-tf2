@@ -1,24 +1,48 @@
+from multiprocessing import pool
+from numpy import short
 import tensorflow as tf
 import tensorflow.keras as keras
 
 OP_DICT = {
-    #'none': lambda C, stride: Zero(stride),
+    'none': lambda C, stride: Zero(stride),
     'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
     'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
     'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
-    #'rel_attention': lambda C, stride: RelAttention(C, stride),
+    'rel_attention': lambda C, stride: RelAttention(C, stride),
     'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
 }
 
 class RelAttention(keras.layers.Layer):
-    def __init__(self, C_curr, stride):
+    def __init__(self, C_curr, stride, conv_short_cut=True, head_dim=32, drop_rate=0, activation='gelu'):
         super().__init__()
+        self.C_curr = C_curr
+        self.stride = stride
+        self.conv_short_cut = conv_short_cut
+        self.head_dim = head_dim
+        self.drop_rate = drop_rate
+        self.activation = activation
 
-#def FeedForwardNet(x, C, stride):
-#    op = keras.layers.Dense(C, activation='relu')(x)
-#    op = keras.layers.Dense(C)(op)
-#    op = keras.layers.MaxPool2D([1,1], stride, padding='same')(op)
-#    return op
+        self.preact = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.max_pool_1 = keras.layers.MaxPool2D(pool_size=stride, strides=stride, padding='same')
+        self.conv_1 = keras.layers.Conv2D(self.C_curr, kernel_size=[1,1], strides=1, padding='valid', use_bias=False)
+        self.max_pool_2 = keras.layers.MaxPool2D(pool_size=2, strides=self.stride, padding='same')
+        #self.multihead_attn = keras.layers.MultiHeadAttention()
+        self.dropout = keras.layers.Dropout(self.drop_rate)
+
+    def call(self, x):
+        preact = self.preact(x)
+        if self.conv_short_cut:
+            shortcut = self.max_pool_1(x) if self.stride[0] > 1 else x
+            shortcut = self.conv_1(shortcut)
+        else:
+            shortcut = x
+
+        if self.stride != 1:
+            op = self.max_pool_2(preact)
+        head_n = op.shape[-1] // self.head_dim
+        op = keras.layers.MultiHeadAttention(head_n, self.head_dim, output_shape=self.C_curr, use_bias=False)(op, op)
+        op = self.dropout(op)
+        return keras.layers.Add()([shortcut, op])
 
 class FeedForwardNet(keras.layers.Layer):
     def __init__(self, C_curr, C_out, stride):
@@ -32,8 +56,13 @@ class FeedForwardNet(keras.layers.Layer):
         op = self.dense_2(op)
         return self.maxpool(op)
 
-#def Zero(x, stride):
-#    return tf.zeros_like(x)[:, ::stride[0], ::stride[1],:]
+class Zero(keras.layers.Layer):
+    def __init__(self, stride):
+        super().__init__()
+        self.stride = stride
+
+    def call(self, x):
+        return tf.zeros_like(x)[:, ::self.stride[0], ::self.stride[1], :]
 
 class SEBlock(keras.layers.Layer):
     def __init__(self, C_curr, ratio=0.25):
@@ -52,16 +81,6 @@ class SEBlock(keras.layers.Layer):
         out = self.expand_conv(out)
         out = tf.nn.sigmoid(out)
         return x * out
-
-#def SEBlock(x, C, ratio=0.25):
-#    op = keras.layers.GlobalAveragePooling2D()(x)
-#    op = tf.expand_dims(op, axis=1)
-#    op = tf.expand_dims(op, axis=1)
-#    op = keras.layers.Conv2D(max(1, int(C * ratio)), kernel_size=[1,1], strides=[1,1], padding='same')(op)
-#    op = op * tf.nn.sigmoid(op)
-#    op = keras.layers.Conv2D(C, kernel_size=[1,1], strides=[1,1], padding='same')(op)
-#    op = tf.nn.sigmoid(op)
-#    return x * op
 
 class MBConv(keras.layers.Layer):
     def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
@@ -104,24 +123,6 @@ class MBConv(keras.layers.Layer):
             out = tf.keras.layers.Add()([out, x])
         return out
 
-#def MBConv(x, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
-#    op = keras.layers.Conv2D(C_curr * expand_ratio, [1,1], [1,1], padding='same')(x)
-#    op = keras.layers.BatchNormalization()(op)
-#    op = keras.activations.gelu(op, approximate=True)
-#    op = op * tf.sigmoid(op)
-#    op = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')(op)
-#    op = keras.layers.BatchNormalization()(op)
-#    op = keras.activations.gelu(op, approximate=True)
-#    op = SEBlock(op, C_curr * expand_ratio)
-#    op = op * tf.sigmoid(op)
-#    op = keras.layers.Conv2D(C_out, [1,1], [1,1], padding='same')(op)
-#    if stride == 1 and C_curr == C_out:
-#        if drop_connect_rate:
-#            op = keras.layers.Dropout(drop_connect_rate)(op)
-#        op = keras.layers.Add([op, x])
-#    return op
-
-
 class Conv(keras.layers.Layer):
     def __init__(self, C_out, stride, kernel_size, padding):
         super().__init__()
@@ -131,11 +132,6 @@ class Conv(keras.layers.Layer):
     def call(self, x):
         op = self.conv(x)
         return self.relu(op)
-
-#def Conv(x, C, stride, kernel_size, padding):
-#    op = keras.layers.Conv2D(C, kernel_size, strides=stride, padding=padding)(x)
-#    op = keras.layers.ReLU()(op)
-#    return op
 
 class ReLUConvBN(keras.layers.Layer):
     def __init__(self, C_out, kernel_size, stride, padding):
@@ -148,12 +144,6 @@ class ReLUConvBN(keras.layers.Layer):
         op = self.relu(x)
         op = self.conv(op)
         return self.bn(op)
-
-#def ReLUConvBN(x, C):
-#    op = keras.layers.ReLU()(x)
-#    op = keras.layers.Conv2D(C, kernel_size=[1,1])(op)
-#    op = keras.layers.BatchNormalization()(op)
-#    return op
 
 class FactorizedReduce(keras.layers.Layer):
     def __init__(self, C_out):
@@ -169,11 +159,3 @@ class FactorizedReduce(keras.layers.Layer):
         out = tf.concat([self.conv_1(x), self.conv_2(x[:,1:,1:,:])], -1)
         out = self.bn(out)
         return out
-
-#def FactorizedReduce(x, C):
-#    op = keras.layers.ReLU()(x)
-#    conv_1 = keras.layers.Conv2D(C // 2, [1,1], strides=[2,2])(op)
-#    conv_2 = keras.layers.Conv2D(C // 2, [1,1], strides=[2,2])(op[:,1:,1:,:])
-#    op = tf.concat([conv_1, conv_2], -1)
-#    op = keras.layers.BatchNormalization()(op)
-#    return op
