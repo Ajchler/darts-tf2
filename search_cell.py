@@ -34,13 +34,15 @@ def main():
         for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
             x_batch_valid, y_batch_valid = next(iter(val_dataset))
-            architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, 'placeholder', optimizer, unrolled=config.args.unrolled)
+            # eta needs to be changed to learning rate scheduler
+            architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, eta=config.args.learning_rate, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
             with tf.GradientTape() as tape:
                 logits = model(x_batch_train) # maybe use training=True?
                 loss = criterion(y_batch_train, logits)
             grads = tape.gradient(loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
+
 
             if step % 10 == 0:
                 print(f'step {step}')
