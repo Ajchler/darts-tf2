@@ -116,7 +116,6 @@ class Network(keras.Model):
         self.alphas_normal = tf.Variable(1e-3*tf.random.uniform([k, n_ops]))
         self.alphas_reduce = tf.Variable(1e-3*tf.random.uniform([k, n_ops]))
         self._arch_params = [self.alphas_normal, self.alphas_reduce]
-        self._arch_params = self._arch_params
 
     def arch_params(self):
         return self._arch_params

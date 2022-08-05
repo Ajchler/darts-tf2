@@ -26,7 +26,7 @@ def main():
     optimizer = keras.optimizers.SGD(learning_rate=config.args.learning_rate, momentum=config.args.momentum)
 
     model = Network(config.args.init_channels, criterion, 10, 8)
-    architect = Architect(model, config.args)
+    architect = Architect(model, config.args, criterion)
 
     for epoch in range(config.args.epochs):
         print(f"Start of epoch {epoch}")
@@ -35,7 +35,7 @@ def main():
 
             x_batch_valid, y_batch_valid = next(iter(val_dataset))
             # eta needs to be changed to learning rate scheduler
-            architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, eta=config.args.learning_rate, net_optimizer=optimizer, unrolled=config.args.unrolled)
+            architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=config.args.learning_rate, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
             with tf.GradientTape() as tape:
                 logits = model(x_batch_train) # maybe use training=True?
