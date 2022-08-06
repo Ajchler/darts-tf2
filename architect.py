@@ -34,6 +34,16 @@ class Architect():
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
         self._virtual_step(x_train, y_train, xi, net_optimizer)
 
+        with tf.GradientTape() as gt:
+            loss = self.v_model._loss(x_valid, y_valid)
+
+        variables = self.v_model.trainable_weights
+        variables.append(self.v_model.alphas_normal)
+        variables.append(self.v_model.alphas_reduce)
+        v_grads = gt.gradient(loss, variables)
+        dalpha = v_grads[-2:]
+        dw = v_grads[:-2]
+
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         with tf.GradientTape() as gt:
             loss = self.model._loss(x_train, y_train)
