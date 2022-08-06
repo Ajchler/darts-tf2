@@ -113,8 +113,8 @@ class Network(keras.Model):
         k = sum(1 for i in range(self._n_nodes) for n in range(i + 2))
         n_ops = len(PRIMITIVES)
 
-        self.alphas_normal = tf.Variable(1e-3*tf.random.uniform([k, n_ops]))
-        self.alphas_reduce = tf.Variable(1e-3*tf.random.uniform([k, n_ops]))
+        self.alphas_normal = tf.Variable(1e-3*tf.random.uniform([k, n_ops]), trainable=False)
+        self.alphas_reduce = tf.Variable(1e-3*tf.random.uniform([k, n_ops]), trainable=False)
         self._arch_params = [self.alphas_normal, self.alphas_reduce]
 
     def arch_params(self):

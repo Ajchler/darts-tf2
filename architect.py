@@ -21,16 +21,6 @@ class Architect():
             grads_normal = gt.gradient(loss, self.model.alphas_normal)
             self.optimizer.apply_gradients(zip([grads_reduce, grads_normal], [self.model.alphas_reduce, self.model.alphas_normal]))
 
-#    def _compute_unrolled_model(self, x_train, y_train, eta, net_optimizer):
-#        with tf.GradientTape() as gt:
-#            loss = self.model._loss(x_train, y_train)
-#        theta = tf.concat([tf.reshape(x, -1) for x in self.model.trainable_weights], -1)
-#        # TODO: moment calculation?
-#        moment = tf.zeros_like(theta)
-#        grads = gt.gradient(loss, self.model.trainable_weights)
-#        dtheta = tf.concat([tf.reshape(g, [-1]) for g in grads], -1)
-#        #TODO:#unrolled_model = self._construct_model_from_theta(tf.subtract(dtheta,))
-
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
         self._virtual_step(x_train, y_train, xi, net_optimizer)
 
@@ -43,6 +33,12 @@ class Architect():
         v_grads = gt.gradient(loss, variables)
         dalpha = v_grads[-2:]
         dw = v_grads[:-2]
+
+        hess = self.calc_hessian(dw, x_train, y_train)
+
+    def calc_hessian(self, dw, x_train, y_train):
+        norm = tf.concat([tf.reshape(x, [-1]) for x in dw], 0)
+        norm = tf.norm(norm)
 
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         with tf.GradientTape() as gt:
