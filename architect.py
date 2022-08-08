@@ -39,6 +39,39 @@ class Architect():
     def calc_hessian(self, dw, x_train, y_train):
         norm = tf.concat([tf.reshape(x, [-1]) for x in dw], 0)
         norm = tf.norm(norm)
+        eps = 0.01 / norm
+
+        # pos
+        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+            self.model.trainable_weights[idx].assign_add(eps * d)
+
+        with tf.GradientTape(persistent=True) as gt:
+            gt.watch(self.model.alphas_normal)
+            gt.watch(self.model.alphas_reduce)
+            loss = self.model._loss(x_train, y_train)
+        dalpha_positive_norm = gt.gradient(loss, self.model.alphas_normal)
+        dalpha_positive_red = gt.gradient(loss, self.model.alphas_reduce)
+
+        # neg
+        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+            self.model.trainable_weights[idx].assign_add(-2. * eps * d)
+
+        with tf.GradientTape(persistent=True) as gt:
+            gt.watch(self.model.alphas_normal)
+            gt.watch(self.model.alphas_reduce)
+            loss = self.model._loss(x_train, y_train)
+        dalpha_negative_norm = gt.gradient(loss, self.model.alphas_normal)
+        dalpha_negative_red = gt.gradient(loss, self.model.alphas_reduce)
+
+        dalpha_positive = tf.concat([dalpha_positive_norm, dalpha_positive_red], 0)
+        dalpha_negative = tf.concat([dalpha_negative_norm, dalpha_negative_red], 0)
+
+        # restore weights
+        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+            self.model.trainable_weights[idx].assign_add(eps * d)
+
+        hess = [(p - n) / 2. * eps for p, n in zip(dalpha_positive, dalpha_negative)]
+        return hess
 
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         with tf.GradientTape() as gt:
@@ -47,7 +80,7 @@ class Architect():
 
         # TODO: momentum calculation
         m = 0
-        for idx, (w, vw, g) in enumerate(zip(self.model.weights, self.v_model.weights, grads)):
+        for idx, (w, vw, g) in enumerate(zip(self.model.trainable_weights, self.v_model.trainable_weights, grads)):
             self.v_model.weights[idx] = w - xi * (m + g + self.weight_decay * w)
 
         for idx, (a, va) in enumerate(zip(self.model._arch_params, self.v_model._arch_params)):

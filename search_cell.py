@@ -43,7 +43,6 @@ def main():
             grads = tape.gradient(loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
-
             if step % 10 == 0:
                 print(f'step {step}')
 
