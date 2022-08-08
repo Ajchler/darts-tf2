@@ -31,6 +31,7 @@ def main():
     for epoch in range(config.args.epochs):
         print(f"Start of epoch {epoch}")
 
+        # TODO: make thsi a train function and add tf.function decorator
         for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
             x_batch_valid, y_batch_valid = next(iter(val_dataset))
@@ -38,7 +39,7 @@ def main():
             architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=config.args.learning_rate, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
             with tf.GradientTape() as tape:
-                logits = model(x_batch_train) # maybe use training=True?
+                logits = model(x_batch_train, training=True) # maybe use training=True?
                 loss = criterion(y_batch_train, logits)
             grads = tape.gradient(loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))

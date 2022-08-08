@@ -13,18 +13,20 @@ class Architect():
 
     def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
         if unrolled:
-            self._backward_step_unrolled(x_train, y_train, x_valid, y_valid, xi, net_optimizer)
+            grads_normal, grads_reduce = self._backward_step_unrolled(x_train, y_train, x_valid, y_valid, xi, net_optimizer)
         else:
             with tf.GradientTape(persistent=True) as gt:
                 loss = self._backward_step(x_valid, y_valid)
-            grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
             grads_normal = gt.gradient(loss, self.model.alphas_normal)
-            self.optimizer.apply_gradients(zip([grads_reduce, grads_normal], [self.model.alphas_reduce, self.model.alphas_normal]))
+            grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
+        self.optimizer.apply_gradients(zip([grads_normal, grads_reduce], [self.model.alphas_normal, self.model.alphas_reduce]))
 
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
         self._virtual_step(x_train, y_train, xi, net_optimizer)
 
         with tf.GradientTape() as gt:
+            gt.watch(self.v_model.alphas_normal)
+            gt.watch(self.v_model.alphas_reduce)
             loss = self.v_model._loss(x_valid, y_valid)
 
         variables = self.v_model.trainable_weights
@@ -35,6 +37,19 @@ class Architect():
         dw = v_grads[:-2]
 
         hess = self.calc_hessian(dw, x_train, y_train)
+        hess_normal = hess[:(len(hess) // 2)]
+        hess_reduce = hess[(len(hess) // 2):]
+
+        grads_normal = []
+        grads_reduce = []
+
+        for alpha, d, h in zip(tf.constant(self.model.alphas_normal), dalpha[0], hess_normal):
+            grads_normal.append(d - xi * h)
+
+        for alpha, d, h in zip(tf.constant(self.model.alphas_reduce), dalpha[1], hess_reduce):
+            grads_reduce.append(d - xi * h)
+
+        return [grads_normal, grads_reduce]
 
     def calc_hessian(self, dw, x_train, y_train):
         norm = tf.concat([tf.reshape(x, [-1]) for x in dw], 0)
