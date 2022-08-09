@@ -38,10 +38,13 @@ def main():
 
     lr_step = 0
 
+    train_acc = keras.metrics.SparseCategoricalAccuracy()
+    validation_acc = keras.metrics.SparseCategoricalAccuracy()
+
     for epoch in range(config.args.epochs):
         print(f"Start of epoch {epoch}")
 
-        # TODO: make thsi a train function and add tf.function decorator
+        # training
         for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
             x_batch_valid, y_batch_valid = next(iter(val_dataset))
@@ -55,10 +58,28 @@ def main():
             grads = tape.gradient(loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
+            train_acc.update_state(y_batch_train, logits)
+
             lr_step += 1
 
             if step % 10 == 0:
-                print(f'step {step}')
+                print(f'Step: {step}')
+                print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
+                print(f"Loss is: {loss}\n")
+
+        trn_acc = train_acc.result()
+        train_acc.reset_states()
+        print(f'Training accuracy over this epoch: {float(trn_acc)}')
+
+        # validation
+        for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
+            logits = model(x_batch_valid, training=False)
+            validation_acc.update_state(y_batch_valid, logits)
+
+        val_acc = validation_acc.result()
+        validation_acc.reset_states()
+        print(f"Validation accuracy: {float(val_acc)}")
+        print(f"End of epoch {epoch}\n\n")
 
 if __name__ == "__main__":
     main()
