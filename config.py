@@ -14,4 +14,5 @@ class Config:
         parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
         parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for architecture')
         parser.add_argument('--unrolled', action='store_true', default=False, help='use one step unrolled validation loss')
+        parser.add_argument('--learning_rate_min', type=float, default=0.001, help='learning rate')
         self.args = parser.parse_args()
