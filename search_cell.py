@@ -5,6 +5,9 @@ from model_search import *
 from config import Config
 from architect import Architect
 import data_utils
+import datetime
+
+tf.get_logger().setLevel('INFO')
 
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)
@@ -33,7 +36,7 @@ def main():
     criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
-    model = Network(config.args.init_channels, criterion, 10, 8)
+    model = Network(config.args.init_channels, criterion, 10, config.args.layers)
     architect = Architect(model, config.args, criterion)
 
     lr_step = 0
@@ -44,8 +47,6 @@ def main():
     best_genotype = model.genotypes()
 
     for epoch in range(config.args.epochs):
-        print(f"Start of epoch {epoch}")
-
         # training
         for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
@@ -64,7 +65,9 @@ def main():
 
             lr_step += 1
 
-            if step % 10 == 0:
+            if step % 1 == 0:
+                print(datetime.datetime.now())
+                print(f'Epoch: {epoch}')
                 print(f'Step: {step}')
                 print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
                 print(f"Loss is: {loss}\n")
@@ -83,10 +86,10 @@ def main():
             best_acc = val_acc
             best_genotype = model.genotypes()
         validation_acc.reset_states()
+        print(f"End of epoch {epoch}\n\n")
         print(f"Validation accuracy: {float(val_acc)}")
         print(f"Genotype: {model.genotypes()}")
         print(f"Alphas: {model.arch_params()}")
-        print(f"End of epoch {epoch}\n\n")
 
     print(f"Best accuracy is: {best_acc}")
     print(f"This was achieved with this genotype: {best_genotype}")

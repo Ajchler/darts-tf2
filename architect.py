@@ -7,7 +7,7 @@ class Architect():
         self.momentum = args.momentum
         self.weight_decay = args.weight_decay
         self.model = model
-        self.v_model = Network(args.init_channels, criterion, 10, 8)
+        self.v_model = Network(args.init_channels, criterion, 10, args.layers)
         self.v_model.set_weights(self.model.get_weights())
         self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)
 

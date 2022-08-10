@@ -15,4 +15,5 @@ class Config:
         parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for architecture')
         parser.add_argument('--unrolled', action='store_true', default=False, help='use one step unrolled validation loss')
         parser.add_argument('--learning_rate_min', type=float, default=0.001, help='learning rate')
+        parser.add_argument('--layers', type=int, default=4, help='Number of layers (sequential cells)')
         self.args = parser.parse_args()
