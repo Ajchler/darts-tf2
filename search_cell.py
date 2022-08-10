@@ -40,6 +40,8 @@ def main():
 
     train_acc = keras.metrics.SparseCategoricalAccuracy()
     validation_acc = keras.metrics.SparseCategoricalAccuracy()
+    best_acc = 0
+    best_genotype = model.genotypes()
 
     for epoch in range(config.args.epochs):
         print(f"Start of epoch {epoch}")
@@ -77,9 +79,18 @@ def main():
             validation_acc.update_state(y_batch_valid, logits)
 
         val_acc = validation_acc.result()
+        if (val_acc > best_acc or epoch == 0):
+            best_acc = val_acc
+            best_genotype = model.genotypes()
         validation_acc.reset_states()
         print(f"Validation accuracy: {float(val_acc)}")
+        print(f"Genotype: {model.genotypes()}")
+        print(f"Alphas: {model.arch_params()}")
         print(f"End of epoch {epoch}\n\n")
+
+    print(f"Best accuracy is: {best_acc}")
+    print(f"This was achieved with this genotype: {best_genotype}")
+    print(f"Alphas: {model.arch_params()}")
 
 if __name__ == "__main__":
     main()

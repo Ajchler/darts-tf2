@@ -1,5 +1,4 @@
-from genotypes import Genotype
-from genotypes import PRIMITIVES
+from genotypes import PRIMITIVES, Genotype
 from operations import *
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -119,3 +118,32 @@ class Network(keras.Model):
 
     def arch_params(self):
         return self._arch_params
+
+    def _parse_alphas(self, weights):
+        weights = tf.constant(weights)
+        gene = []
+        n = 2
+        start = 0
+        for i in range(self._n_nodes):
+            end = start + n
+            W = weights[start:end]
+            edges = sorted(range(i + 2), key=lambda x: -max(W[x][k] for k in range(len(W[x])) if k != PRIMITIVES.index('none')))[:2]
+            node_gene = []
+            for j in edges:
+                k_best = None
+                for k in range(len(W[j])):
+                    if k != PRIMITIVES.index('none'):
+                        if k_best is None or W[j][k] > W[j][k_best]:
+                            k_best = k
+                node_gene.append((PRIMITIVES[k_best], j))
+            gene.append(node_gene)
+            start = end
+            n += 1
+        return gene
+
+    def genotypes(self):
+        gene_normal = self._parse_alphas(tf.nn.softmax(self.alphas_normal))
+        gene_reduce = self._parse_alphas(tf.nn.softmax(self.alphas_reduce))
+
+        concat = range(2 + self._n_nodes - self._multiplier, self._n_nodes + 2)
+        return Genotype(gene_normal, concat, gene_reduce, concat)
