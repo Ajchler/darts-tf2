@@ -16,4 +16,6 @@ class Config:
         parser.add_argument('--unrolled', action='store_true', default=False, help='use one step unrolled validation loss')
         parser.add_argument('--learning_rate_min', type=float, default=0.001, help='learning rate')
         parser.add_argument('--layers', type=int, default=4, help='Number of layers (sequential cells)')
+        parser.add_argument('--nodes', type=int, default=4, help='Number of inner nodes (states)')
+        parser.add_argument('--multiplier', type=int, default=4, help='Multiplier')
         self.args = parser.parse_args()
