@@ -1,5 +1,3 @@
-from multiprocessing import pool
-from numpy import short
 import tensorflow as tf
 import tensorflow.keras as keras
 
