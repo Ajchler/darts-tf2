@@ -21,13 +21,15 @@ class RelAttention(keras.layers.Layer):
         self.head_dim = head_dim
         self.drop_rate = drop_rate
         self.activation = activation
+        self.head_n = C_curr // head_dim
 
         self.preact = keras.layers.LayerNormalization(epsilon=1e-5)
         self.max_pool_1 = keras.layers.MaxPool2D(pool_size=stride, strides=stride, padding='same')
         self.conv_1 = keras.layers.Conv2D(self.C_curr, kernel_size=[1,1], strides=1, padding='valid', use_bias=False)
         self.max_pool_2 = keras.layers.MaxPool2D(pool_size=2, strides=self.stride, padding='same')
-        #self.multihead_attn = keras.layers.MultiHeadAttention()
+        self.multihead_attn = keras.layers.MultiHeadAttention(self.head_n, self.head_dim, output_shape=C_curr, use_bias=False)
         self.dropout = keras.layers.Dropout(self.drop_rate)
+        self.add = keras.layers.Add()
 
     def call(self, x):
         preact = self.preact(x)
@@ -39,10 +41,9 @@ class RelAttention(keras.layers.Layer):
 
         if self.stride != 1:
             op = self.max_pool_2(preact)
-        head_n = op.shape[-1] // self.head_dim
-        op = keras.layers.MultiHeadAttention(head_n, self.head_dim, output_shape=self.C_curr, use_bias=False)(op, op)
+        op = self.multihead_attn(op, op)
         op = self.dropout(op)
-        return keras.layers.Add()([shortcut, op])
+        return self.add([shortcut, op])
 
 class FeedForwardNet(keras.layers.Layer):
     def __init__(self, C_curr, C_out, stride):
@@ -98,6 +99,7 @@ class MBConv(keras.layers.Layer):
         self.se_block = SEBlock(C_curr * expand_ratio)
         self.conv_2 = keras.layers.Conv2D(C_out, 1, 1, padding='same')
         self.bn_3 = keras.layers.BatchNormalization()
+        self.add = keras.layers.Add()
 
         # dropout is probably useless since this value will probably never be
         # used, but in case it was in some of the experiments, it stays for now
@@ -120,7 +122,7 @@ class MBConv(keras.layers.Layer):
         if self._stride == 1 and self._C_curr == self._C_out:
             if self._drop_connect_rate:
                 out = self.droupout(out)
-            out = tf.keras.layers.Add()([out, x])
+            out = self.add([out, x])
         return out
 
 class Conv(keras.layers.Layer):
