@@ -8,7 +8,7 @@ import data_utils
 import datetime
 import sys
 
-orig_stdout = sys.stdout
+LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
@@ -18,133 +18,119 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
-def main():
-    config = Config()
-    tf.random.set_seed(config.args.seed)
+config = Config()
+tf.random.set_seed(config.args.seed)
 
-    with open('train.log', 'a') as f:
-        sys.stdout = f
-        print(f'CLI arguments given: {sys.argv[1:]}')
-        sys.stdout = orig_stdout
+# dataset handling
+(x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
+x_train = x_train / 255
+y_train = y_train
+x_test = x_test / 255
+y_test = y_test
+train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+val_dataset = val_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
 
-    # dataset handling
-    (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
-    x_train = x_train / 255
-    y_train = y_train
-    x_test = x_test / 255
-    y_test = y_test
-    train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-    train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
-    val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))# validation dataset
-    val_dataset = val_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+# calculate number of steps for learning rate decay
+decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 
-    decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
+# Initialize learing rate scheduler, loss function and optimizer
+lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
+criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
-    lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
-    criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-    optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
+# Create a model and an architect
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
+architect = Architect(model, config.args, criterion)
 
-    model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
-    architect = Architect(model, config.args, criterion)
+tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
+tb_callback.set_model(model)
 
-    lr_step = 0
+lr_step = 0
 
-    train_acc = keras.metrics.SparseCategoricalAccuracy()
-    validation_acc = keras.metrics.SparseCategoricalAccuracy()
-    best_acc = 0
-    best_genotype = model.genotypes()
+# Initialize metrics
+train_loss = keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
+train_acc = keras.metrics.SparseCategoricalAccuracy()
+valid_loss = keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
+validation_acc = keras.metrics.SparseCategoricalAccuracy()
+best_acc = 0
+best_genotype = model.genotypes()
 
-    for epoch in range(config.args.epochs):
-        # training
-        for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
+# prepare log directories
+current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
+test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
+train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
-            x_batch_valid, y_batch_valid = next(iter(val_dataset))
-            # eta needs to be changed to learning rate scheduler
-            lr = current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate)
-            architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
+for epoch in range(config.args.epochs):
+    # training
+    for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
-            with tf.GradientTape() as tape:
-                logits = model(x_batch_train, training=True) # maybe use training=True?
-                loss = criterion(y_batch_train, logits)
-            grads = tape.gradient(loss, model.trainable_weights)
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+        x_batch_valid, y_batch_valid = next(iter(val_dataset))
+        # eta needs to be changed to learning rate scheduler
+        lr = current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate)
+        architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
-            train_acc.update_state(y_batch_train, logits)
+        with tf.GradientTape() as tape:
+            logits = model(x_batch_train, training=True) # maybe use training=True?
+            loss = criterion(y_batch_train, logits)
+        grads = tape.gradient(loss, model.trainable_weights)
+        optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
-            lr_step += 1
+        train_loss.update_state(y_batch_train, logits)
+        train_acc.update_state(y_batch_train, logits)
 
-            if step % 1 == 0:
-                print(datetime.datetime.now())
-                print(f'Epoch: {epoch}')
-                print(f'Step: {step}')
-                print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
-                print(f"Loss is: {loss}\n")
+        lr_step += 1
 
-                with open('train.log', 'a') as f:
-                    sys.stdout = f
-                    print(datetime.datetime.now())
-                    print(f'Epoch: {epoch}')
-                    print(f'Step: {step}')
-                    print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
-                    print(f"Loss is: {loss}\n")
-                    sys.stdout = orig_stdout
+        if (step + 1) % 1 == 0:
+            print(datetime.datetime.now())
+            print(f'Epoch: {epoch + 1}')
+            print(f'Step: {step + 1}')
+            print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
+            print(f"Loss is: {loss}\n")
 
+    with test_summary_writer.as_default():
+        tf.summary.scalar('loss', train_loss.result(), step=epoch)
+        tf.summary.scalar('accuracy', train_acc.result(), step=epoch)
 
-        trn_acc = train_acc.result()
-        train_acc.reset_states()
-        with open('train.log', 'a') as f:
-            sys.stdout = f
-            print(f'Training accuracy over this epoch: {float(trn_acc)}')
-            sys.stdout = orig_stdout
+    trn_acc = train_acc.result()
 
-        # validation
-        for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
-            logits = model(x_batch_valid, training=False)
-            loss = criterion(y_batch_valid, logits)
-            validation_acc.update_state(y_batch_valid, logits)
-            if step % 1 == 0:
-                print(datetime.datetime.now())
-                print(f'Epoch: {epoch}')
-                print(f'Validation step: {step}')
-                print(f"Validation loss is: {loss}\n")
+    # validation
+    for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
+        logits = model(x_batch_valid, training=False)
+        loss = criterion(y_batch_valid, logits)
+        validation_acc.update_state(y_batch_valid, logits)
+        valid_loss.update_state(y_batch_valid, logits)
+        if (step + 1) % 10 == 0:
+            print(datetime.datetime.now())
+            print(f'Epoch: {epoch + 1}')
+            print(f'Validation step: {step + 1}')
+            print(f"Validation loss is: {loss}\n")
 
-                with open('train.log', 'a') as f:
-                    sys.stdout = f
-                    print(datetime.datetime.now())
-                    print(f'Epoch: {epoch}')
-                    print(f'Validation step: {step}')
-                    print(f"Validation loss is: {loss}\n")
-                    sys.stdout = orig_stdout
+    with test_summary_writer.as_default():
+        tf.summary.scalar('loss', valid_loss.result(), step=epoch)
+        tf.summary.scalar('accuracy', val_acc.result(), step=epoch)
+
+    val_acc = validation_acc.result()
+    if (val_acc > best_acc or epoch == 0):
+        best_acc = val_acc
+        best_genotype = model.genotypes()
 
 
-        val_acc = validation_acc.result()
-        if (val_acc > best_acc or epoch == 0):
-            best_acc = val_acc
-            best_genotype = model.genotypes()
-        validation_acc.reset_states()
-        print(f"End of epoch {epoch}")
-        print(f"Validation accuracy: {float(val_acc)}")
-        print(f"Genotype: {model.genotypes()}")
-        print(f"Alphas: {model.arch_params()}\n\n")
+    print(f"End of epoch {epoch + 1}")
+    print(f"Validation accuracy: {float(val_acc)}")
+    print(f"Genotype: {model.genotypes()}")
+    print(f"Alphas: {model.arch_params()}\n\n")
 
-        with open('train.log', 'a') as f:
-            sys.stdout = f
-            print(f"End of epoch {epoch}")
-            print(f"Validation accuracy: {float(val_acc)}")
-            print(f"Genotype: {model.genotypes()}")
-            print(f"Alphas: {model.arch_params()}\n\n")
-            sys.stdout = orig_stdout
+    # End of epoch, reset metrics
+    train_loss.reset_states()
+    valid_loss.reset_states()
+    train_acc.reset_states()
+    validation_acc.reset_states()
 
-    print(f"Best accuracy is: {best_acc}")
-    print(f"This was achieved with this genotype: {best_genotype}")
-    print(f"Alphas: {model.arch_params()}")
+print(f"Best accuracy is: {best_acc}")
+print(f"This was achieved with this genotype: {best_genotype}")
+print(f"Alphas: {model.arch_params()}")
 
-    with open('train.log', 'a') as f:
-        sys.stdout = f
-        print(f"Best accuracy is: {best_acc}")
-        print(f"This was achieved with this genotype: {best_genotype}")
-        print(f"Alphas: {model.arch_params()}")
-        sys.stdout = orig_stdout
-
-if __name__ == "__main__":
-    main()

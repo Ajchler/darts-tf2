@@ -75,7 +75,7 @@ class Network(keras.Model):
             cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev)
             reduction_prev = reduction
             self.cells.append(cell)
-            C_curr_out = C_curr * n_nodes
+            C_curr_out = C_curr * self._multiplier
             C_prev_prev, C_prev = C_prev, C_curr_out
 
         self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()

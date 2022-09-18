@@ -1,6 +1,7 @@
 # project specific
 plot.svg
 darts4coatnet.code-workspace
+/logs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
