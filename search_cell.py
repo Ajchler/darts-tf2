@@ -133,4 +133,3 @@ for epoch in range(config.args.epochs):
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {model.arch_params()}")
-
