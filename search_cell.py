@@ -65,6 +65,8 @@ train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 for epoch in range(config.args.epochs):
+    print(f"Initial genotype: {best_genotype}")
+    print(f"Initial alphas: {model.arch_params()}")
     # training
     for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
@@ -84,14 +86,14 @@ for epoch in range(config.args.epochs):
 
         lr_step += 1
 
-        if (step + 1) % 1 == 0:
+        if (step + 1) % 10 == 0:
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}\n")
 
-    with test_summary_writer.as_default():
+    with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)
         tf.summary.scalar('accuracy', train_acc.result(), step=epoch)
 
@@ -109,11 +111,12 @@ for epoch in range(config.args.epochs):
             print(f'Validation step: {step + 1}')
             print(f"Validation loss is: {loss}\n")
 
+    val_acc = validation_acc.result()
+
     with test_summary_writer.as_default():
         tf.summary.scalar('loss', valid_loss.result(), step=epoch)
-        tf.summary.scalar('accuracy', val_acc.result(), step=epoch)
+        tf.summary.scalar('accuracy', validation_acc.result(), step=epoch)
 
-    val_acc = validation_acc.result()
     if (val_acc > best_acc or epoch == 0):
         best_acc = val_acc
         best_genotype = model.genotypes()
