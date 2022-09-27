@@ -95,9 +95,8 @@ class Architect():
             loss = self.model._loss(x_train, y_train)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
-        # TODO: momentum calculation, not sure about this at all
-        m = 0
-        for idx, (w, vw, g) in enumerate(zip(self.model.trainable_weights, self.v_model.trainable_weights, grads)):
+        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.weights[1:], grads)):
+            # m is momentum of optmizier
             self.v_model.weights[idx] = w - xi * (m + g + self.weight_decay * w)
 
         for idx, (a, va) in enumerate(zip(self.model._arch_params, self.v_model._arch_params)):

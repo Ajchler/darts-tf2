@@ -10,7 +10,7 @@ class Config:
         parser.add_argument('--learning_rate', type=float, default=0.025, help='learning rate')
         parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
         parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
-        parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+        parser.add_argument('--batch_size', type=int, default=4, help='batch size')
         parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
         parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for architecture')
         parser.add_argument('--unrolled', action='store_true', default=False, help='use one step unrolled validation loss')
