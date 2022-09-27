@@ -64,9 +64,10 @@ test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
+print(f"Initial genotype: {best_genotype}")
+print(f"Initial alphas: {model.arch_params()}")
+
 for epoch in range(config.args.epochs):
-    print(f"Initial genotype: {best_genotype}")
-    print(f"Initial alphas: {model.arch_params()}")
     # training
     for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
 
