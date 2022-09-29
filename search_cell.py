@@ -6,7 +6,6 @@ from config import Config
 from architect import Architect
 import data_utils
 import datetime
-import sys
 
 LOG_DIR='./logs'
 
@@ -118,10 +117,12 @@ for epoch in range(config.args.epochs):
         tf.summary.scalar('loss', valid_loss.result(), step=epoch)
         tf.summary.scalar('accuracy', validation_acc.result(), step=epoch)
 
+    with open(f"{train_log_dir}/genotype_epoch_{epoch + 1}", 'w') as genotype_file:
+        genotype_file.write(str(model.genotypes()))
+
     if (val_acc > best_acc or epoch == 0):
         best_acc = val_acc
         best_genotype = model.genotypes()
-
 
     print(f"End of epoch {epoch + 1}")
     print(f"Validation accuracy: {float(val_acc)}")
@@ -137,3 +138,6 @@ for epoch in range(config.args.epochs):
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {model.arch_params()}")
+
+with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
+    genotype_file.write(str(best_genotype))
