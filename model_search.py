@@ -12,7 +12,7 @@ class MixedOp(keras.layers.Layer):
             self._ops.append(op)
 
     def call(self, x, weights):
-        return sum(w * op(x) for w, op in zip(weights, self._ops))
+        return tf.math.add_n(tf.math.multiply(w, op(x)) for w, op in zip(weights, self._ops))
 
 class Cell(keras.layers.Layer):
     def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev):
@@ -41,7 +41,7 @@ class Cell(keras.layers.Layer):
         states = [s0, s1]
         offset = 0
         for i in range(self._n_nodes):
-            s = sum(self._ops[offset + j](h, weights[offset + j]) for j, h in enumerate(states))
+            s = tf.math.add_n(self._ops[offset + j](h, weights[offset + j]) for j, h in enumerate(states))
             offset += len(states)
             states.append(s)
 

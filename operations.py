@@ -76,10 +76,10 @@ class SEBlock(keras.layers.Layer):
         out = tf.expand_dims(out, axis=1)
         out = tf.expand_dims(out, axis=1)
         out = self.reduce_conv(out)
-        out = out * tf.nn.sigmoid(out)
+        out = tf.math.multiply(out, tf.nn.sigmoid(out))
         out = self.expand_conv(out)
         out = tf.nn.sigmoid(out)
-        return x * out
+        return tf.math.multiply(x, out)
 
 class MBConv(keras.layers.Layer):
     def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
@@ -107,12 +107,12 @@ class MBConv(keras.layers.Layer):
         out = self.conv_1(x)
         out = self.bn_1(out)
         out = tf.nn.gelu(out, approximate=True)
-        out = out * tf.sigmoid(out)
+        out = tf.math.multiply(out, tf.sigmoid(out))
         out = self.depth_wise_conv(out)
         out = self.bn_2(out)
         out = tf.nn.gelu(out, approximate=True)
         out = self.se_block(out)
-        out = out * tf.sigmoid(out)
+        out = tf.math.multiply(out, tf.sigmoid(out))
         out = self.conv_2(out)
         #out = self.bn_3(out)
         #out = tf.nn.gelu(out, approximate=True)

@@ -11,6 +11,7 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
+
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)
     cosine_decay = 0.5 * (1 + np.cos(np.pi * step / decay_steps))
@@ -67,9 +68,10 @@ print(f"Initial genotype: {best_genotype}")
 print(f"Initial alphas: {model.arch_params()}")
 
 for epoch in range(config.args.epochs):
+    #tf.profiler.experimental.start(logdir=LOG_DIR)
     # training
     for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-
+        #with tf.profiler.experimental.Trace('train', step_num=step+1, _r=1):
         x_batch_valid, y_batch_valid = next(iter(val_dataset))
         # eta needs to be changed to learning rate scheduler
         lr = current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate)
@@ -80,6 +82,7 @@ for epoch in range(config.args.epochs):
             loss = criterion(y_batch_train, logits)
         grads = tape.gradient(loss, model.trainable_weights)
         optimizer.apply_gradients(zip(grads, model.trainable_weights))
+
 
         train_loss.update_state(y_batch_train, logits)
         train_acc.update_state(y_batch_train, logits)
@@ -92,6 +95,11 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}\n")
+            model.summary()
+            #tf.profiler.experimental.stop()
+            #tf.profiler.experimental.start(logdir=LOG_DIR)
+
+    #tf.profiler.experimental.stop()
 
     with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)
@@ -138,6 +146,7 @@ for epoch in range(config.args.epochs):
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {model.arch_params()}")
+
 
 with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
     genotype_file.write(str(best_genotype))
