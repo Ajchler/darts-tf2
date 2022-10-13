@@ -37,19 +37,12 @@ class Architect():
         v_grads = gt.gradient(loss, variables)
         dalpha = v_grads[-2:]
         dw = v_grads[:-2]
-
         hess = self.calc_hessian(dw, x_train, y_train)
-        hess_normal = hess[:(len(hess) // 2)]
-        hess_reduce = hess[(len(hess) // 2):]
+        hess_normal, hess_reduce = tf.split(hess, num_or_size_splits=2, axis=0)
 
-        grads_normal = []
-        grads_reduce = []
+        grads_normal = tf.math.subtract(dalpha[0], tf.multiply(tf.cast(xi, tf.float32), hess_normal))
 
-        for alpha, d, h in zip(tf.constant(self.model.alphas_normal), dalpha[0], hess_normal):
-            grads_normal.append(tf.math.subtract(d, tf.math.multiply(xi, h)))
-
-        for alpha, d, h in zip(tf.constant(self.model.alphas_reduce), dalpha[1], hess_reduce):
-            grads_reduce.append(tf.math.subtract(d, tf.math.multiply(xi, h)))
+        grads_reduce = tf.math.subtract(dalpha[1], tf.multiply(xi, hess_reduce))
 
         return [grads_normal, grads_reduce]
 
@@ -59,7 +52,7 @@ class Architect():
         eps = tf.math.divide(0.01, norm)
 
         # pos
-        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+        for idx, d in enumerate(dw):
             self.model.trainable_weights[idx].assign_add(tf.math.multiply(eps, d))
 
         with tf.GradientTape(persistent=True) as gt:
@@ -70,7 +63,7 @@ class Architect():
         dalpha_positive_red = gt.gradient(loss, self.model.alphas_reduce)
 
         # neg
-        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+        for idx, d in enumerate(dw):
             self.model.trainable_weights[idx].assign_add(tf.math.multiply(tf.math.multiply(-2., eps), d))
 
         with tf.GradientTape(persistent=True) as gt:
@@ -84,10 +77,11 @@ class Architect():
         dalpha_negative = tf.concat([dalpha_negative_norm, dalpha_negative_red], 0)
 
         # restore weights
-        for idx, (_, d) in enumerate(zip(self.model.trainable_weights, dw)):
+        for idx, d in enumerate(dw):
             self.model.trainable_weights[idx].assign_add(tf.math.multiply(eps, d))
 
-        hess = [tf.math.divide(tf.math.subtract(p, n), tf.math.multiply(2., eps)) for p, n in zip(dalpha_positive, dalpha_negative)]
+        hess = tf.math.divide(tf.math.subtract(dalpha_positive, dalpha_negative), tf.math.multiply(2., eps))
+        #hess = [tf.math.divide(tf.math.subtract(p, n), tf.math.multiply(2., eps)) for p, n in zip(dalpha_positive, dalpha_negative)]
         return hess
 
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
@@ -99,7 +93,7 @@ class Architect():
             # m is momentum of optmizier
             self.v_model.weights[idx] = tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m, g), tf.math.multiply(self.weight_decay, w))))
 
-        for idx, (a, va) in enumerate(zip(self.model._arch_params, self.v_model._arch_params)):
+        for idx, a in enumerate(self.model._arch_params):
             self.v_model._arch_params[idx] = a
 
     def _backward_step(self, input_valid, target_valid):

@@ -11,6 +11,28 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
+@tf.function
+def validation_step(x_batch_valid, y_batch_valid):
+        logits = model(x_batch_valid, training=False)
+        loss = criterion(y_batch_valid, logits)
+        validation_acc.update_state(y_batch_valid, logits)
+        valid_loss.update_state(y_batch_valid, logits)
+        return loss
+
+@tf.function
+def train_step(x_batch_train, y_batch_train):
+    with tf.GradientTape() as tape:
+        logits = model(x_batch_train, training=True) # maybe use training=True?
+        loss = criterion(y_batch_train, logits)
+    grads = tape.gradient(loss, model.trainable_weights)
+    optimizer.apply_gradients(zip(grads, model.trainable_weights))
+    train_loss.update_state(y_batch_train, logits)
+    train_acc.update_state(y_batch_train, logits)
+    return loss
+
+@tf.function
+def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
+    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)
@@ -47,6 +69,7 @@ architect = Architect(model, config.args, criterion)
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
 tb_callback.set_model(model)
 
+lr = tf.cast(config.args.learning_rate, tf.float32)
 lr_step = 0
 
 # Initialize metrics
@@ -68,25 +91,13 @@ print(f"Initial genotype: {best_genotype}")
 print(f"Initial alphas: {model.arch_params()}")
 
 for epoch in range(config.args.epochs):
-    #tf.profiler.experimental.start(logdir=LOG_DIR)
     # training
     for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-        #with tf.profiler.experimental.Trace('train', step_num=step+1, _r=1):
         x_batch_valid, y_batch_valid = next(iter(val_dataset))
         # eta needs to be changed to learning rate scheduler
-        lr = current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate)
-        architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
-
-        with tf.GradientTape() as tape:
-            logits = model(x_batch_train, training=True) # maybe use training=True?
-            loss = criterion(y_batch_train, logits)
-        grads = tape.gradient(loss, model.trainable_weights)
-        optimizer.apply_gradients(zip(grads, model.trainable_weights))
-
-
-        train_loss.update_state(y_batch_train, logits)
-        train_acc.update_state(y_batch_train, logits)
-
+        lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
+        architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
+        loss = train_step(x_batch_train, y_batch_train)
         lr_step += 1
 
         if (step + 1) % 10 == 0:
@@ -95,11 +106,6 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}\n")
-            model.summary()
-            #tf.profiler.experimental.stop()
-            #tf.profiler.experimental.start(logdir=LOG_DIR)
-
-    #tf.profiler.experimental.stop()
 
     with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)
@@ -109,10 +115,7 @@ for epoch in range(config.args.epochs):
 
     # validation
     for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
-        logits = model(x_batch_valid, training=False)
-        loss = criterion(y_batch_valid, logits)
-        validation_acc.update_state(y_batch_valid, logits)
-        valid_loss.update_state(y_batch_valid, logits)
+        loss = validation_step(x_batch_valid, y_batch_valid)
         if (step + 1) % 10 == 0:
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
@@ -146,7 +149,6 @@ for epoch in range(config.args.epochs):
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {model.arch_params()}")
-
 
 with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
     genotype_file.write(str(best_genotype))
