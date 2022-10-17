@@ -87,6 +87,11 @@ test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
+
+with open(f"{train_log_dir}/genotype_initial", 'w') as genotype_file:
+    genotype_file.write(str(best_genotype))
+with open(f"{train_log_dir}/config", 'w') as config_file:
+    config_file.write(str(config.args))
 print(f"Initial genotype: {best_genotype}")
 print(f"Initial alphas: {model.arch_params()}")
 
@@ -100,7 +105,7 @@ for epoch in range(config.args.epochs):
         loss = train_step(x_batch_train, y_batch_train)
         lr_step += 1
 
-        if (step + 1) % 10 == 0:
+        if (step + 1) % 100 == 0:
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')
@@ -116,7 +121,7 @@ for epoch in range(config.args.epochs):
     # validation
     for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
         loss = validation_step(x_batch_valid, y_batch_valid)
-        if (step + 1) % 10 == 0:
+        if (step + 1) % 100 == 0:
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
             print(f'Validation step: {step + 1}')
