@@ -3,7 +3,7 @@ import tensorflow as tf
 from functools import partial
 
 class Config:
-    def __init__(self):
+    def __init__(self, type):
         parser = argparse.ArgumentParser('config', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         parser.add_argument = partial(parser.add_argument, help=' ')
         parser.add_argument('--seed', type=int, default=1, help='random seed')
@@ -19,4 +19,6 @@ class Config:
         parser.add_argument('--layers', type=int, default=3, help='Number of layers (sequential cells)')
         parser.add_argument('--nodes', type=int, default=4, help='Number of inner nodes (states)')
         parser.add_argument('--multiplier', type=int, default=4, help='Multiplier')
+        if type == 'train':
+            parser.add_argument('--genotype', required=True, help='Genotype to build network from')
         self.args = parser.parse_args()

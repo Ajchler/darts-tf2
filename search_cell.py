@@ -40,7 +40,7 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
-config = Config()
+config = Config('search')
 tf.random.set_seed(config.args.seed)
 
 # dataset handling
@@ -82,8 +82,8 @@ best_genotype = model.genotypes()
 
 # prepare log directories
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
-test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
+train_log_dir = 'logs/search_arch/' + current_time + '/train'
+test_log_dir = 'logs/search_arch/' + current_time + '/test'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
@@ -133,6 +133,7 @@ for epoch in range(config.args.epochs):
         tf.summary.scalar('loss', valid_loss.result(), step=epoch)
         tf.summary.scalar('accuracy', validation_acc.result(), step=epoch)
 
+    # end of epoch logging and updating/reseting metrics
     with open(f"{train_log_dir}/genotype_epoch_{epoch + 1}", 'w') as genotype_file:
         genotype_file.write(str(model.genotypes()))
 
@@ -145,15 +146,15 @@ for epoch in range(config.args.epochs):
     print(f"Genotype: {model.genotypes()}")
     print(f"Alphas: {model.arch_params()}\n\n")
 
-    # End of epoch, reset metrics
     train_loss.reset_states()
     valid_loss.reset_states()
     train_acc.reset_states()
     validation_acc.reset_states()
 
+# end of architecture search
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {model.arch_params()}")
-
+model.summary()
 with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
     genotype_file.write(str(best_genotype))

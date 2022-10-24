@@ -5,8 +5,8 @@ OP_DICT = {
     'none': lambda C, stride: Zero(stride),
     'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
     'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
-    'rel_attention': lambda C, stride: RelAttention(C, stride),
+    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3, drop_connect_rate=0.5),
+    'rel_attention': lambda C, stride: RelAttention(C, stride, drop_rate=0.5),
     'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
 }
 
@@ -101,7 +101,7 @@ class MBConv(keras.layers.Layer):
 
         # dropout is probably useless since this value will probably never be
         # used, but in case it was in some of the experiments, it stays for now
-        self.droupout = keras.layers.Dropout(drop_connect_rate)
+        self.dropout = keras.layers.Dropout(drop_connect_rate)
 
     def call(self, x):
         out = self.conv_1(x)
@@ -119,7 +119,7 @@ class MBConv(keras.layers.Layer):
 
         if self._stride == 1 and self._C_curr == self._C_out:
             if self._drop_connect_rate:
-                out = self.droupout(out)
+                out = self.dropout(out)
             out = self.add([out, x])
         return out
 
