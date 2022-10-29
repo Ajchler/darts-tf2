@@ -5,8 +5,8 @@ OP_DICT = {
     'none': lambda C, stride: Zero(stride),
     'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
     'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3, drop_connect_rate=0.5),
-    'rel_attention': lambda C, stride: RelAttention(C, stride, drop_rate=0.5),
+    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
+    'rel_attention': lambda C, stride: RelAttention(C, stride),
     'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
 }
 
@@ -26,7 +26,7 @@ class RelAttention(keras.layers.Layer):
         self.conv_1 = keras.layers.Conv2D(self.C_curr, kernel_size=[1,1], strides=1, padding='valid', use_bias=False)
         self.max_pool_2 = keras.layers.MaxPool2D(pool_size=2, strides=self.stride, padding='same')
         self.multihead_attn = keras.layers.MultiHeadAttention(self.head_n, self.head_dim, output_shape=C_curr, use_bias=False)
-        self.dropout = keras.layers.Dropout(self.drop_rate)
+        #self.dropout = keras.layers.Dropout(self.drop_rate)
         self.add = keras.layers.Add()
 
     def call(self, x):
@@ -40,7 +40,7 @@ class RelAttention(keras.layers.Layer):
         if self.stride != 1:
             op = self.max_pool_2(preact)
         op = self.multihead_attn(op, op)
-        op = self.dropout(op)
+        #op = self.dropout(op)
         return self.add([shortcut, op])
 
 class FeedForwardNet(keras.layers.Layer):
