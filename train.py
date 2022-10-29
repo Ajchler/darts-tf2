@@ -10,7 +10,7 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
-#@tf.function
+@tf.function
 def validation_step(x_batch_valid, y_batch_valid):
         logits = model(x_batch_valid, training=False)
         loss = criterion(y_batch_valid, logits)
@@ -18,7 +18,7 @@ def validation_step(x_batch_valid, y_batch_valid):
         valid_loss.update_state(y_batch_valid, logits)
         return loss
 
-#@tf.function
+@tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits = model(x_batch_train, training=True) # maybe use training=True?
@@ -55,7 +55,7 @@ decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, clipnorm=0.5)
 
 # Create a model and an architect
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(config.args.genotype))
