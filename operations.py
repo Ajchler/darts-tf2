@@ -20,6 +20,7 @@ class RelAttention(keras.layers.Layer):
         self.drop_rate = drop_rate
         self.activation = activation
         self.head_n = C_curr // head_dim
+        self.head_n = self.head_n if self.head_n > 0 else 1
 
         self.preact = keras.layers.LayerNormalization(epsilon=1e-5)
         self.max_pool_1 = keras.layers.MaxPool2D(pool_size=stride, strides=stride, padding='same')

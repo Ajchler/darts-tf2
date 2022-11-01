@@ -33,13 +33,12 @@ class Cell(keras.layers.Layer):
         s1 = self.preprocess1(s1)
 
         states = [s0, s1]
-        for i in range(self._n_nodes - 1):
+        for i in range(self._n_nodes):
             s_cur = 0
             for j in range(2):
                 temp = self.dropout(states[self.indices[i * 2 +j]])
                 s_cur += self.ops[i * 2 + j](temp)
             states.append(s_cur)
-
         return tf.concat([states[i] for i in self.concat], -1)
 
 class Network(keras.Model):

@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import keras
+import tensorflow.keras as keras
 from model_train import *
 from config import Config
 import data_utils
@@ -57,8 +57,11 @@ lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_s
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, clipnorm=0.5)
 
+with open(config.args.genotype_file, "r") as f:
+    genotype = f.read()
+
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(config.args.genotype))
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(genotype))
 
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
 tb_callback.set_model(model)
@@ -79,6 +82,9 @@ train_log_dir = 'logs/train_arch/' + current_time + '/train'
 test_log_dir = 'logs/train_arch/' + current_time + '/test'
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
 test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+
+with open(f"{train_log_dir}/config", 'w') as config_file:
+    config_file.write(str(config.args))
 
 for epoch in range(config.args.epochs):
     # training

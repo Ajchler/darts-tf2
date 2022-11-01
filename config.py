@@ -20,5 +20,5 @@ class Config:
         parser.add_argument('--nodes', type=int, default=4, help='Number of inner nodes (states)')
         parser.add_argument('--multiplier', type=int, default=4, help='Multiplier')
         if type == 'train':
-            parser.add_argument('--genotype', required=True, help='Genotype to build network from')
+            parser.add_argument('--genotype_file', required=True, help='Genotype to build network from')
         self.args = parser.parse_args()
