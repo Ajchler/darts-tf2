@@ -4,13 +4,13 @@ import tensorflow as tf
 import tensorflow.keras as keras
 
 class Cell(keras.layers.Layer):
-    def __init__(self, n_nodes, multiplier, C_curr, reduction, reduction_prev, genotype):
+    def __init__(self, n_nodes, multiplier, C_curr, reduction, reduction_prev, genotype, drop_rate):
         super().__init__()
         self._reduction_prev = reduction_prev
         self.reduction = reduction
         self._n_nodes = n_nodes
         self._multiplier = multiplier
-        self.dropout = tf.keras.layers.Dropout(0.4)
+        self.dropout = tf.keras.layers.Dropout(drop_rate)
 
         if reduction_prev:
             self.preprocess0 = FactorizedReduce(C_curr)
@@ -36,13 +36,12 @@ class Cell(keras.layers.Layer):
         for i in range(self._n_nodes):
             s_cur = 0
             for j in range(2):
-                temp = self.dropout(states[self.indices[i * 2 +j]])
-                s_cur += self.ops[i * 2 + j](temp)
+                s_cur += self.dropout(self.ops[i * 2 + j](states[self.indices[i * 2 +j]]))
             states.append(s_cur)
         return tf.concat([states[i] for i in self.concat], -1)
 
 class Network(keras.Model):
-    def __init__(self, C, criterion, n_classes, n_layers, genotype, n_nodes=4, multiplier=4, stem_multiplier=3):
+    def __init__(self, C, criterion, n_classes, n_layers, genotype, drop_rate, n_nodes=4, multiplier=4, stem_multiplier=3):
         super(Network, self).__init__()
         self._C = C
         self._n_classes = n_classes
@@ -50,6 +49,7 @@ class Network(keras.Model):
         self._n_nodes = n_nodes
         self._multiplier = multiplier
         self._criterion = criterion
+        self._drop_rate = drop_rate
 
         C_curr = C * stem_multiplier
         self.stem_1 = keras.layers.Conv2D(C_curr, kernel_size=(3,3), strides=(1,1), padding='same', use_bias=False)
@@ -66,7 +66,7 @@ class Network(keras.Model):
             else:
                 reduction = False
 
-            cell = Cell(n_nodes, multiplier, C_curr, reduction, reduction_prev, genotype)
+            cell = Cell(n_nodes, multiplier, C_curr, reduction, reduction_prev, genotype, drop_rate)
             reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * self._multiplier

@@ -61,7 +61,7 @@ with open(config.args.genotype_file, "r") as f:
     genotype = f.read()
 
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(genotype))
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(genotype), drop_rate=config.args.drop_rate)
 
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
 tb_callback.set_model(model)
