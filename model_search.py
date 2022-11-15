@@ -4,15 +4,16 @@ import tensorflow as tf
 import tensorflow.keras as keras
 
 class MixedOp(keras.layers.Layer):
-    def __init__(self, C_curr, stride):
+    def __init__(self, C_curr, C_prev, stride):
         super().__init__()
+        self.stride = stride
         self._ops = []
         for prim in PRIMITIVES:
-            op = OP_DICT[prim](C_curr, stride)
+            op = OP_DICT[prim](C_curr, C_prev, stride)
             self._ops.append(op)
 
     def call(self, x, weights):
-        weights = tf.reshape(weights, [6, 1, 1, 1, 1])
+        weights = tf.reshape(weights, [len(PRIMITIVES), 1, 1, 1, 1])
         ops = [op(x) for op in self._ops]
         return tf.reduce_sum(ops * weights, axis=0)
         #return tf.math.add_n(tf.math.multiply(w, op(x)) for w, op in zip(weights, self._ops))
@@ -35,7 +36,7 @@ class Cell(keras.layers.Layer):
         for i in range(self._n_nodes):
             for j in range (i + 2):
                 stride = [2,2] if reduction and j < 2 else [1,1]
-                self._ops.append(MixedOp(C_curr, stride))
+                self._ops.append(MixedOp(C_curr, C_prev, stride))
 
     def call(self, s0, s1, weights):
         s0 = self.preprocess0(s0)

@@ -1,14 +1,56 @@
 import tensorflow as tf
 import tensorflow.keras as keras
 
+#OP_DICT = {
+#    'none': lambda C, stride: Zero(stride),
+#    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
+#    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
+#    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
+#    'rel_attention': lambda C, stride: RelAttention(C, stride),
+#    'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
+#}
+
 OP_DICT = {
-    'none': lambda C, stride: Zero(stride),
-    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
-    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
-    'rel_attention': lambda C, stride: RelAttention(C, stride),
-    'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
+    'none' : lambda C_curr, C_prev, stride: Zero(stride),
+    'avg_pool_3x3' : lambda C_curr, C_prev, stride: keras.layers.AveragePooling2D(3, strides=stride, padding='same'),
+    'max_pool_3x3' : lambda C_curr, C_prev, stride: keras.layers.MaxPool2D(3, strides=stride, padding='same'),
+    'skip_connect' : lambda C_curr, C_prev, stride: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
+    'sep_conv_3x3' : lambda C_curr, C_prev, stride: SepConv(C_curr, C_prev, 3, stride),
+    'sep_conv_5x5' : lambda C_curr, C_prev, stride: SepConv(C_curr, C_prev, 5, stride),
+    'sep_conv_7x7' : lambda C_curr, C_prev, stride: SepConv(C_curr, C_prev, 7, stride),
+    'dil_conv_3x3' : lambda C_curr, C_prev, stride: DilConv(C_curr, 3, stride, 2),
+    'dil_conv_5x5' : lambda C_curr, C_prev, stride: DilConv(C_curr, 5, stride, 2),
 }
+
+class DilConv(keras.layers.Layer):
+    def __init__(self, C_curr, kernel_size, stride, rate):
+        super().__init__()
+        self.relu = keras.layers.ReLU()
+        self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size, stride, dilation_rate=rate, padding='same')
+        self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x):
+        x = self.relu(x)
+        x = self.sep_conv(x)
+        x = self.bn(x)
+        return x
+
+class SepConv(keras.layers.Layer):
+    def __init__(self, C_curr, C_prev, kernel_size, stride):
+        super().__init__()
+        self.relu = keras.layers.ReLU()
+        self.sep_conv1 = keras.layers.SeparableConv2D(C_prev, kernel_size=kernel_size, strides=stride, padding='same')
+        self.bn1 = keras.layers.BatchNormalization()
+        self.sep_conv2 = keras.layers.SeparableConv2D(C_curr, kernel_size=kernel_size, padding='same')
+        self.bn2 = keras.layers.BatchNormalization()
+
+    def call(self, x):
+        x = self.relu(x)
+        x = self.sep_conv1(x)
+        x = self.bn1(x)
+        x = self.sep_conv2(x)
+        x = self.bn2(x)
+        return x
 
 class RelAttention(keras.layers.Layer):
     def __init__(self, C_curr, stride, conv_short_cut=True, head_dim=32, drop_rate=0, activation='gelu'):
@@ -55,6 +97,13 @@ class FeedForwardNet(keras.layers.Layer):
         op = self.dense_1(x)
         op = self.dense_2(op)
         return self.maxpool(op)
+
+class Identity(keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, x):
+        return x
 
 class Zero(keras.layers.Layer):
     def __init__(self, stride):
