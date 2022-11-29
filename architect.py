@@ -91,10 +91,10 @@ class Architect():
 
         for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.weights[1:], grads)):
             # m is momentum of optmizier
-            self.v_model.weights[idx] = tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m, g), tf.math.multiply(self.weight_decay, w))))
+            self.v_model.trainable_weights[idx].assign(tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m, g), tf.math.multiply(self.weight_decay, w)))))
 
         for idx, a in enumerate(self.model._arch_params):
-            self.v_model._arch_params[idx] = a
+            self.v_model._arch_params[idx].assign(a)
 
     def _backward_step(self, input_valid, target_valid):
         return self.model._loss(input_valid, target_valid)

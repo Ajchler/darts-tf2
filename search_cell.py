@@ -45,10 +45,17 @@ tf.random.set_seed(config.args.seed)
 
 # dataset handling
 (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
+x = np.concatenate([x_train, x_test])
+y = np.concatenate([y_train, y_test])
+x_train = x[:len(x) // 2]
+x_test = x[len(x) // 2:]
+y_train = y[:len(y) // 2]
+y_test = y[len(y) // 2:]
 x_train = x_train / 255
 y_train = y_train
 x_test = x_test / 255
 y_test = y_test
+
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
