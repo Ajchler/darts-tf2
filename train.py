@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import keras_cv
 from model_train import *
 from config import Config
 import data_utils
@@ -8,11 +9,17 @@ import datetime
 
 LOG_DIR='./logs'
 
+#gpus = tf.config.experimental.list_physical_devices('GPU')
+#print(gpus)
+#tf.config.experimental.set_memory_growth(gpus[0], True)
+
 tf.get_logger().setLevel('INFO')
+config = Config('train')
+tf.random.set_seed(config.args.seed)
 
 @tf.function
 def validation_step(x_batch_valid, y_batch_valid):
-        logits = model(x_batch_valid, training=False)
+        logits, _ = model(x_batch_valid, training=False)
         loss = criterion(y_batch_valid, logits)
         validation_acc.update_state(y_batch_valid, logits)
         valid_loss.update_state(y_batch_valid, logits)
@@ -21,8 +28,11 @@ def validation_step(x_batch_valid, y_batch_valid):
 @tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
-        logits = model(x_batch_train, training=True) # maybe use training=True?
+        logits, logits_aux = model(x_batch_train, training=True) # maybe use training=True?
         loss = criterion(y_batch_train, logits)
+        if config.args.auxiliary:
+            loss_aux = criterion(y_batch_train, logits_aux)
+            loss += config.args.auxiliary_weight * loss_aux
     grads = tape.gradient(loss, model.trainable_weights)
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
@@ -35,15 +45,25 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
-config = Config('train')
-tf.random.set_seed(config.args.seed)
-
 # dataset handling
 (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
+x = np.concatenate([x_train, x_test])
+if config.args.cutout:
+    cutout = keras_cv.layers.preprocessing.RandomCutout(0.5, 0.5)
+    x = cutout(x)
+y = np.concatenate([y_train, y_test])
+x_train = x[:len(x) // 2]
+x_test = x[len(x) // 2:]
+y_train = y[:len(y) // 2]
+y_test = y[len(y) // 2:]
+
+
 x_train = x_train / 255
 y_train = y_train
 x_test = x_test / 255
 y_test = y_test
+
+
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
@@ -61,7 +81,7 @@ with open(config.args.genotype_file, "r") as f:
     genotype = f.read()
 
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(genotype), drop_rate=config.args.drop_rate)
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, genotype=eval(genotype), drop_rate=config.args.drop_rate, auxiliary=config.args.auxiliary)
 
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
 tb_callback.set_model(model)
