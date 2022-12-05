@@ -25,6 +25,6 @@ class Config:
         if type == 'train':
             parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary head')
             parser.add_argument('--genotype_file', required=True, help='Genotype to build network from')
-            parser.add_argument('--drop_rate', type=float, default=0.3, help='Dropout rate')
+            parser.add_argument('--drop_rate', type=float, default=0.2, help='Dropout rate')
             parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
         self.args = parser.parse_args()

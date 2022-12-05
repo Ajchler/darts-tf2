@@ -19,11 +19,11 @@ tf.random.set_seed(config.args.seed)
 
 @tf.function
 def validation_step(x_batch_valid, y_batch_valid):
-        logits, _ = model(x_batch_valid, training=False)
-        loss = criterion(y_batch_valid, logits)
-        validation_acc.update_state(y_batch_valid, logits)
-        valid_loss.update_state(y_batch_valid, logits)
-        return loss
+    logits, _ = model(x_batch_valid, training=False)
+    loss = criterion(y_batch_valid, logits)
+    validation_acc.update_state(y_batch_valid, logits)
+    valid_loss.update_state(y_batch_valid, logits)
+    return loss
 
 @tf.function
 def train_step(x_batch_train, y_batch_train):
