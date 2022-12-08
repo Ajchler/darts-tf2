@@ -125,6 +125,7 @@ class Network(keras.Model):
             if i == (2 * self._n_layers // 3):
                 if self._auxiliary and training:
                     logits_aux = self.auxiliary_head(s1)
+
         out = self.global_pooling(s1)
         logits = self.classifier(out)
         return logits, logits_aux

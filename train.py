@@ -9,15 +9,11 @@ import datetime
 
 LOG_DIR='./logs'
 
-#gpus = tf.config.experimental.list_physical_devices('GPU')
-#print(gpus)
-#tf.config.experimental.set_memory_growth(gpus[0], True)
-
 tf.get_logger().setLevel('INFO')
 config = Config('train')
 tf.random.set_seed(config.args.seed)
 
-@tf.function
+#@tf.function
 def validation_step(x_batch_valid, y_batch_valid):
     logits, _ = model(x_batch_valid, training=False)
     loss = criterion(y_batch_valid, logits)
@@ -25,7 +21,7 @@ def validation_step(x_batch_valid, y_batch_valid):
     valid_loss.update_state(y_batch_valid, logits)
     return loss
 
-@tf.function
+#@tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits, logits_aux = model(x_batch_train, training=True) # maybe use training=True?
@@ -50,13 +46,7 @@ def current_lr(step, decay_steps, alpha, initial_lr):
 x = np.concatenate([x_train, x_test])
 if config.args.cutout:
     cutout = keras_cv.layers.preprocessing.RandomCutout(0.5, 0.5)
-    x = cutout(x)
-y = np.concatenate([y_train, y_test])
-x_train = x[:len(x) // 2]
-x_test = x[len(x) // 2:]
-y_train = y[:len(y) // 2]
-y_test = y[len(y) // 2:]
-
+    x_train = cutout(x_train)
 
 x_train = x_train / 255
 y_train = y_train
@@ -65,9 +55,9 @@ y_test = y_test
 
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size)
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+val_dataset = val_dataset.shuffle(buffer_size=10000).batch(config.args.batch_size)
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
@@ -109,7 +99,6 @@ with open(f"{train_log_dir}/config", 'w') as config_file:
 for epoch in range(config.args.epochs):
     # training
     for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-        x_batch_valid, y_batch_valid = next(iter(val_dataset))
         # eta needs to be changed to learning rate scheduler
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         loss = train_step(x_batch_train, y_batch_train)

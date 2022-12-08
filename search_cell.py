@@ -11,7 +11,7 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
-@tf.function
+#@tf.function
 def validation_step(x_batch_valid, y_batch_valid):
         logits = model(x_batch_valid, training=False)
         loss = criterion(y_batch_valid, logits)
@@ -19,18 +19,19 @@ def validation_step(x_batch_valid, y_batch_valid):
         valid_loss.update_state(y_batch_valid, logits)
         return loss
 
-@tf.function
+#@tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits = model(x_batch_train, training=True) # maybe use training=True?
         loss = criterion(y_batch_train, logits)
+
     grads = tape.gradient(loss, model.trainable_weights)
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
     return loss
 
-@tf.function
+#@tf.function
 def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
     architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
@@ -57,9 +58,9 @@ x_test = x_test / 255
 y_test = y_test
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
@@ -104,8 +105,7 @@ print(f"Initial alphas: {model.arch_params()}")
 
 for epoch in range(config.args.epochs):
     # training
-    for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-        x_batch_valid, y_batch_valid = next(iter(val_dataset))
+    for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
         # eta needs to be changed to learning rate scheduler
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
