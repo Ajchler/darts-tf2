@@ -13,7 +13,7 @@ tf.get_logger().setLevel('INFO')
 config = Config('train')
 tf.random.set_seed(config.args.seed)
 
-#@tf.function
+@tf.function
 def validation_step(x_batch_valid, y_batch_valid):
     logits, _ = model(x_batch_valid, training=False)
     loss = criterion(y_batch_valid, logits)
@@ -21,7 +21,7 @@ def validation_step(x_batch_valid, y_batch_valid):
     valid_loss.update_state(y_batch_valid, logits)
     return loss
 
-#@tf.function
+@tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits, logits_aux = model(x_batch_train, training=True) # maybe use training=True?

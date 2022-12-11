@@ -11,7 +11,7 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
-#@tf.function
+@tf.function
 def validation_step(x_batch_valid, y_batch_valid):
         logits = model(x_batch_valid, training=False)
         loss = criterion(y_batch_valid, logits)
@@ -19,7 +19,7 @@ def validation_step(x_batch_valid, y_batch_valid):
         valid_loss.update_state(y_batch_valid, logits)
         return loss
 
-#@tf.function
+@tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits = model(x_batch_train, training=True) # maybe use training=True?
@@ -31,7 +31,7 @@ def train_step(x_batch_train, y_batch_train):
     train_acc.update_state(y_batch_train, logits)
     return loss
 
-#@tf.function
+@tf.function
 def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
     architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
