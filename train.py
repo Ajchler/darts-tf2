@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import tensorflow_addons as tfa
 from model_train import *
 from config import Config
 import data_utils
@@ -40,30 +41,6 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
-# https://stackoverflow.com/questions/46152187/tf-mask-random-rectangle-in-image
-def cutout(x_train, y_train):
-    height, width = x_train.shape[1], x_train.shape[2]
-    y = tf.random.uniform([], 0, height, tf.int64)
-    x = tf.random.uniform([], 0, width, tf.int64)
-    y1 = y - config.args.cutout_length // 2
-    y2 = y + config.args.cutout_length // 2
-    x1 = x - config.args.cutout_length // 2
-    x2 = x + config.args.cutout_length // 2
-
-    y1 = tf.clip_by_value(y1, 0, height)
-    y2 = tf.clip_by_value(y2, 0, height)
-    x1 = tf.clip_by_value(x1, 0, width)
-    x2 = tf.clip_by_value(x2, 0, width)
-
-    mask = tf.concat([
-        tf.ones([height, y1], dtype=tf.float64),
-        tf.concat([tf.ones([x1, y2-y1], dtype=tf.float64), tf.zeros([x2-x1, y2-y1], dtype=tf.float64), tf.ones([32 - x2, y2-y1], dtype=tf.float64)], axis=0),
-        tf.ones([32, 32 - y2], dtype=tf.float64)
-    ], axis=1)
-    mask = tf.stack([mask] * 3, axis=2)
-
-    return x_train * mask, y_train
-
 # dataset handling
 (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
 
@@ -73,7 +50,7 @@ x_test = x_test / 255
 y_test = y_test
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.map(cutout).shuffle(buffer_size=50000).batch(config.args.batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size).map(lambda x_train, y_train: (tfa.image.random_cutout(x_train, (16, 16), 0), y_train))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 val_dataset = val_dataset.shuffle(buffer_size=10000).batch(config.args.batch_size)
 
