@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import tensorflow_addons as tfa
 from model_search import *
 from config import Config
 from architect import Architect
@@ -58,7 +59,7 @@ x_test = x_test / 255
 y_test = y_test
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size).map(lambda x_train, y_train: (tfa.image.random_cutout(x_train, (16, 16), 0), y_train))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
 
