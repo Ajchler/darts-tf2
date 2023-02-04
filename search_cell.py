@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import tensorflow_addons as tfa
 from model_search import *
 from config import Config
 from architect import Architect
@@ -57,10 +58,21 @@ y_train = y_train
 x_test = x_test / 255
 y_test = y_test
 
+train_transform = tf.keras.Sequential([
+    keras.layers.RandomCrop(32, 32),
+    keras.layers.RandomFlip("horizontal"),
+    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
+])
+
+valid_transform = tf.keras.Sequential([
+    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
+])
+
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size
+                                                            ).map(lambda x, y: (train_transform(x, training=True), y))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size).map(lambda x, y: (valid_transform(x, training=True), y))
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
