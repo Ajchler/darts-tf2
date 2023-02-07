@@ -27,6 +27,7 @@ def train_step(x_batch_train, y_batch_train):
         loss = criterion(y_batch_train, logits)
 
     grads = tape.gradient(loss, model.trainable_weights)
+    grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)

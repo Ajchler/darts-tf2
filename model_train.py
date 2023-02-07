@@ -103,7 +103,6 @@ class Network(keras.Model):
             C_prev_prev, C_prev = C_prev, C_curr_out
 
         self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
-        # using Dense layer from tensorflow as a replacement of nn.Linear()
         self.classifier = tf.keras.layers.Dense(n_classes, activation=None)
 
         if auxiliary:
