@@ -9,7 +9,7 @@ class Architect():
         self.model = model
         self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
         self.v_model.set_weights(self.model.get_weights())
-        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)
+        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999, weight_decay=1e-3)
 
     def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
         if unrolled:
@@ -89,9 +89,9 @@ class Architect():
             loss = self.model._loss(x_train, y_train)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
-        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.weights[1:], grads)):
+        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.variables()[1:], grads)):
             # m is momentum of optmizier
-            self.v_model.trainable_weights[idx].assign(tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m, g), tf.math.multiply(self.weight_decay, w)))))
+            self.v_model.trainable_weights[idx].assign(tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m * self.momentum, g), tf.math.multiply(self.weight_decay, w)))))
 
         for idx, a in enumerate(self.model._arch_params):
             self.v_model._arch_params[idx].assign(a)
