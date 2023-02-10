@@ -30,7 +30,8 @@ def train_step(x_batch_train, y_batch_train):
             loss_aux = criterion(y_batch_train, logits_aux)
             loss += config.args.auxiliary_weight * loss_aux
     grads = tape.gradient(loss, model.trainable_weights)
-    grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
+    grads = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
+    #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -42,6 +43,14 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
+def trans(x, y):
+    x = tf.image.resize_with_pad(x, 40, 40)
+    x = keras.layers.RandomCrop(32, 32)(x)
+    x = keras.layers.RandomFlip("horizontal")(x)
+    x = tfa.image.random_cutout(x, (16, 16), 0)
+
+    return x, y
+
 # dataset handling
 (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
 
@@ -50,22 +59,11 @@ y_train = y_train
 x_test = x_test / 255
 y_test = y_test
 
-train_transform = tf.keras.Sequential([
-    keras.layers.RandomCrop(32, 32),
-    keras.layers.RandomFlip("horizontal"),
-    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
-])
-
-valid_transform = tf.keras.Sequential([
-    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
-])
-
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size
-                                                            ).map(lambda x, y: (train_transform(x, training=True), y)
-                                                            ).map(lambda x_2, y_2: (tfa.image.random_cutout(x_2, (16, 16), 0), y_2)) # TODO: CUTOUT SHOULD BE USED WHEN TRAINING AUGEMNTED NETWORK
+train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size)
+train_dataset = train_dataset.map(lambda x, y: trans(x, y))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size).map(lambda x, y: (valid_transform(x, training=True), y))
+val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
@@ -73,7 +71,7 @@ decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, clipnorm=0.5, weight_decay=config.args.weight_decay)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, weight_decay=config.args.weight_decay)
 
 with open(config.args.genotype_file, "r") as f:
     genotype = f.read()

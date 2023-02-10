@@ -27,7 +27,8 @@ def train_step(x_batch_train, y_batch_train):
         loss = criterion(y_batch_train, logits)
 
     grads = tape.gradient(loss, model.trainable_weights)
-    grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
+    grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
+    #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -42,6 +43,13 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     cosine_decay = 0.5 * (1 + np.cos(np.pi * step / decay_steps))
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
+
+def trans(x_train, y_train):
+    x_train = tf.image.resize_with_pad(x_train, 40, 40)
+    x_train = keras.layers.RandomCrop(32, 32)(x_train)
+    x_train = keras.layers.RandomFlip("horizontal")(x_train)
+
+    return x_train, y_train
 
 config = Config('search')
 tf.random.set_seed(config.args.seed)
@@ -59,21 +67,11 @@ y_train = y_train
 x_test = x_test / 255
 y_test = y_test
 
-train_transform = tf.keras.Sequential([
-    keras.layers.RandomCrop(32, 32),
-    keras.layers.RandomFlip("horizontal"),
-    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
-])
-
-valid_transform = tf.keras.Sequential([
-    keras.layers.Normalization(mean=[0.49139968, 0.48215827, 0.44653124], variance=[0.24703233, 0.24348505, 0.26158768])
-])
-
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size
-                                                            ).map(lambda x, y: (train_transform(x, training=True), y))
+train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+train_dataset = train_dataset.map(lambda x, y: trans(x, y))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size).map(lambda x, y: (valid_transform(x, training=True), y))
+val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
@@ -81,7 +79,7 @@ decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, clipnorm=config.args.grad_clip, weight_decay=config.args.weight_decay)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, weight_decay=config.args.weight_decay)
 
 # Create a model and an architect
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
@@ -131,6 +129,7 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}\n")
+
 
     with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)
