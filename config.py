@@ -17,7 +17,7 @@ class Config:
         parser.add_argument('--unrolled', action='store_true', default=True, help='use one step unrolled validation loss')
         parser.add_argument('--cutout', action='store_true', default=False, help='use cutout on input images')
         parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
-        parser.add_argument('--learning_rate_min', type=float, default=0.04, help='learning rate')
+        parser.add_argument('--learning_rate_min', type=float, default=0.001, help='learning rate')
         parser.add_argument('--layers', type=int, default=8, help='Number of layers (sequential cells)')
         parser.add_argument('--nodes', type=int, default=4, help='Number of inner nodes (states)')
         parser.add_argument('--multiplier', type=int, default=4, help='Multiplier')
