@@ -58,7 +58,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_positive_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_positive_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -69,7 +69,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_negative_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_negative_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -86,15 +86,20 @@ class Architect():
 
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         with tf.GradientTape() as gt:
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
-        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.variables()[1:], grads)):
+        try:
+            moment = net_optimizer.momentums
+        except:
+            moment = [0] * len(grads)
+
+        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, moment, grads)):
             # m is momentum of optmizier
-            self.v_model.trainable_weights[idx].assign(tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m * self.momentum, g), tf.math.multiply(self.weight_decay, w)))))
+            self.v_model.trainable_weights[idx].assign(w - xi * ( m * self.momentum + g + self.weight_decay * w))
 
         for idx, a in enumerate(self.model._arch_params):
             self.v_model._arch_params[idx].assign(a)
 
     def _backward_step(self, input_valid, target_valid):
-        return self.model._loss(input_valid, target_valid)
+        return self.model._loss(input_valid, target_valid, training=True)

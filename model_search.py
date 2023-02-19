@@ -108,8 +108,8 @@ class Network(keras.Model):
         logits = self.classifier(out)
         return logits
 
-    def _loss(self, x, target):
-        logits = self(x, training=True)
+    def _loss(self, x, target, training=False):
+        logits = self(x, training=training)
         return self._criterion(target, logits)
 
     def _initialize_alphas(self):

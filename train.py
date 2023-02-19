@@ -116,6 +116,7 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}\n")
+            print(f"Learning rate: {lr}\n")
 
     with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)

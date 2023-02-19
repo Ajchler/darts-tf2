@@ -36,7 +36,7 @@ def train_step(x_batch_train, y_batch_train):
 
 @tf.function
 def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
-    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
+    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=optimizer.lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)
@@ -112,12 +112,14 @@ with open(f"{train_log_dir}/genotype_initial", 'w') as genotype_file:
 with open(f"{train_log_dir}/config", 'w') as config_file:
     config_file.write(str(config.args))
 print(f"Initial genotype: {best_genotype}")
-print(f"Initial alphas: {model.arch_params()}")
+print(f"Initial alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 
 for epoch in range(config.args.epochs):
     # training
     for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
         # eta needs to be changed to learning rate scheduler
+        if epoch == 0 and step == 0:
+            architect.v_model._loss(x_batch_valid, y_batch_valid)
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
         loss = train_step(x_batch_train, y_batch_train)
@@ -128,7 +130,8 @@ for epoch in range(config.args.epochs):
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
-            print(f"Loss is: {loss}\n")
+            print(f"Loss is: {loss}")
+            print(f"Learning rate: {lr}\n")
 
 
     with train_summary_writer.as_default():
@@ -163,7 +166,7 @@ for epoch in range(config.args.epochs):
     print(f"End of epoch {epoch + 1}")
     print(f"Validation accuracy: {float(val_acc)}")
     print(f"Genotype: {model.genotypes()}")
-    print(f"Alphas: {model.arch_params()}\n\n")
+    print(f"Alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}\n\n")
 
     train_loss.reset_states()
     valid_loss.reset_states()
@@ -173,7 +176,7 @@ for epoch in range(config.args.epochs):
 # end of architecture search
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
-print(f"Alphas: {model.arch_params()}")
+print(f"Alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 model.summary()
 with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
     genotype_file.write(str(best_genotype))
