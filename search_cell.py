@@ -55,9 +55,7 @@ config = Config('search')
 tf.random.set_seed(config.args.seed)
 
 # dataset handling
-(x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
-x = np.concatenate([x_train, x_test])
-y = np.concatenate([y_train, y_test])
+(x, y), (x_, y_) = data_utils.load_cifar10()
 x_train = x[:len(x) // 2]
 x_test = x[len(x) // 2:]
 y_train = y[:len(y) // 2]
