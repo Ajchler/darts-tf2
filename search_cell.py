@@ -29,6 +29,9 @@ def train_step(x_batch_train, y_batch_train):
     grads = tape.gradient(loss, model.trainable_weights)
     grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
     #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
+    # To replicate using weight decay in optimizer use this:TODO: use this in train.py as well
+    #for var in model.trainable_weights:
+    #    var.assign_sub(var * config.args.weight_decay * lr)
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -129,7 +132,8 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}")
-            print(f"Learning rate: {lr}\n")
+            print(f"Learning rate: {optimizer.lr}")
+            print(f"My learning rate: {lr}\n")
 
 
     with train_summary_writer.as_default():
