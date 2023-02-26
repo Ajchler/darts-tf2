@@ -63,7 +63,7 @@ train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size)
 train_dataset = train_dataset.map(lambda x, y: trans(x, y))
 val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+val_dataset = val_dataset.shuffle(buffer_size=10000).batch(config.args.batch_size)
 
 # calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
