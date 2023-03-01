@@ -1,5 +1,6 @@
 import tensorflow as tf
 import tensorflow.keras as keras
+#from python.keras.layers.fake_convolutional import FakeApproxConv2D
 
 #OP_DICT = {
 #    'none': lambda C, stride: Zero(stride),
@@ -11,25 +12,28 @@ import tensorflow.keras as keras
 #}
 
 OP_DICT = {
-    'none' : lambda C_curr, C_prev, stride: Zero(stride),
-    'avg_pool_3x3' : lambda C_curr, C_prev, stride: keras.layers.AveragePooling2D(3, strides=stride, padding='same'),
-    'max_pool_3x3' : lambda C_curr, C_prev, stride: keras.layers.MaxPool2D(3, strides=stride, padding='same'),
-    'skip_connect' : lambda C_curr, C_prev, stride: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
+    'none' : lambda C_curr, C_prev, stride, approx: Zero(stride),
+    'avg_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.AveragePooling2D(3, strides=stride, padding='same'),
+    'max_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.MaxPool2D(3, strides=stride, padding='same'),
+    'skip_connect' : lambda C_curr, C_prev, stride, approx: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
     #'sep_conv_3x3' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 3, stride),
     #'sep_conv_5x5' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 5, stride),
-    'sep_conv_3x3' : lambda C_curr, C_prev, stride: SepConv(C_curr, 3, stride),
-    'sep_conv_5x5' : lambda C_curr, C_prev, stride: SepConv(C_curr, 5, stride),
+    'sep_conv_3x3' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 3, stride, approx),
+    'sep_conv_5x5' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 5, stride, approx),
     #'sep_conv_7x7' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=7, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 7, stride),
     #'dil_conv_3x3' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 3, stride, 2),
     #'dil_conv_5x5' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 5, stride, 2),
-    'dil_conv_3x3' : lambda C_curr, C_prev, stride: DilConv(C_curr, 3, stride, 2),
-    'dil_conv_5x5' : lambda C_curr, C_prev, stride: DilConv(C_curr, 5, stride, 2),
+    'dil_conv_3x3' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 3, stride, 2, approx),
+    'dil_conv_5x5' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 5, stride, 2, approx),
 }
 
 class DilConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, rate):
+    def __init__(self, C_curr, kernel_size, stride, rate, approx):
         super().__init__()
         self.relu = keras.layers.ReLU()
+        #if approx:
+        #    self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, 'same')
+        #else:
         self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size, stride, dilation_rate=rate, padding='same')
         self.bn = keras.layers.BatchNormalization()
 
@@ -40,9 +44,12 @@ class DilConv(keras.layers.Layer):
         return x
 
 class SepConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride):
+    def __init__(self, C_curr, kernel_size, stride, approx):
         super().__init__()
         self.relu = keras.layers.ReLU()
+        #if approx:
+        #    self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, 'same')
+        #else:
         self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size=kernel_size, strides=stride, padding='same')
         self.bn = keras.layers.BatchNormalization()
 

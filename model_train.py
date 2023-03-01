@@ -70,7 +70,7 @@ class Cell(keras.layers.Layer):
         return tf.concat([states[i] for i in self.concat], -1)
 
 class Network(keras.Model):
-    def __init__(self, C, criterion, n_classes, n_layers, genotype, drop_rate, n_nodes=4, multiplier=4, stem_multiplier=3, auxiliary=False):
+    def __init__(self, C, criterion, n_classes, n_layers, genotype, drop_rate, n_nodes=4, multiplier=4, stem_multiplier=3, auxiliary=False, approx=False):
         super(Network, self).__init__()
         self._C = C
         self._n_classes = n_classes
