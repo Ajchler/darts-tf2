@@ -31,6 +31,8 @@ def train_step(x_batch_train, y_batch_train):
             loss += config.args.auxiliary_weight * loss_aux
     grads = tape.gradient(loss, model.trainable_weights)
     grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
+    for var in model.trainable_weights:
+        var.assign_sub(var * config.args.weight_decay * lr)
     #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
@@ -71,7 +73,7 @@ decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, weight_decay=config.args.weight_decay)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 with open(config.args.genotype_file, "r") as f:
     genotype = f.read()
@@ -111,6 +113,7 @@ for epoch in range(config.args.epochs):
         lr_step += 1
 
         if (step + 1) % 100 == 0:
+            model.summary()
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')

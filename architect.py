@@ -9,7 +9,7 @@ class Architect():
         self.model = model
         self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
         self.v_model.set_weights(self.model.get_weights())
-        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999, weight_decay=1e-3)
+        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)#, weight_decay=1e-3)
 
     def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
         if unrolled:

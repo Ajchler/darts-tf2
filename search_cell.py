@@ -30,8 +30,8 @@ def train_step(x_batch_train, y_batch_train):
     grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
     #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
     # To replicate using weight decay in optimizer use this:TODO: use this in train.py as well
-    #for var in model.trainable_weights:
-    #    var.assign_sub(var * config.args.weight_decay * lr)
+    for var in model.trainable_weights:
+        var.assign_sub(var * config.args.weight_decay * lr)
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -80,7 +80,7 @@ decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum, weight_decay=config.args.weight_decay)
+optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 # Create a model and an architect
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, approx=config.args.approx)
