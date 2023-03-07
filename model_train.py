@@ -29,7 +29,7 @@ class AuxiliaryHeadCifar(keras.layers.Layer):
         return x
 
 class Cell(keras.layers.Layer):
-    def __init__(self, n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate):
+    def __init__(self, n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate, approx):
         super().__init__()
         self._reduction_prev = reduction_prev
         self.reduction = reduction
@@ -50,7 +50,7 @@ class Cell(keras.layers.Layer):
         for edges in gene:
             for op in edges:
                 stride = [2, 2] if reduction and op[1] < 2 else [1, 1]
-                self.ops.append(OP_DICT[op[0]](C_curr, C_prev, stride))
+                self.ops.append(OP_DICT[op[0]](C_curr, C_prev, stride, approx))
                 self.indices.append(op[1])
 
     def call(self, s0, s1):
@@ -96,7 +96,7 @@ class Network(keras.Model):
             else:
                 reduction = False
 
-            cell = Cell(n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate)
+            cell = Cell(n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate, approx)
             reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * self._multiplier
