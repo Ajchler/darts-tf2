@@ -71,7 +71,7 @@ val_dataset = val_dataset.shuffle(buffer_size=10000).batch(config.args.batch_siz
 decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
 
 # Initialize learing rate scheduler, loss function and optimizer
-lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
+lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, 0)
 criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 

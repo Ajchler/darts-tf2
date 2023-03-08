@@ -59,23 +59,28 @@ tf.random.set_seed(config.args.seed)
 
 # dataset handling
 (x, y), (x_, y_) = data_utils.load_cifar10()
-x_train = x[:len(x) // 2]
-x_test = x[len(x) // 2:]
-y_train = y[:len(y) // 2]
-y_test = y[len(y) // 2:]
-x_train = x_train / 255
-y_train = y_train
-x_test = x_test / 255
-y_test = y_test
+#x_train = x[:len(x) // 2]
+#x_test = x[len(x) // 2:]
+#y_train = y[:len(y) // 2]
+#y_test = y[len(y) // 2:]
+#x_train = x_train / 255
+#y_train = y_train
+#x_test = x_test / 255
+#y_test = y_test
+x = x / 255
 
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
-train_dataset = train_dataset.map(lambda x, y: trans(x, y))
-val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=30000).batch(config.args.batch_size)
+dataset = tf.data.Dataset.from_tensor_slices((x, y))
+dataset = dataset.shuffle(buffer_size=50000)
+train_dataset = dataset.take(25000)
+val_dataset = dataset.skip(25000).take(25000)
+train_dataset = train_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
+train_dataset = train_dataset.map(lambda x1, y1: trans(x1, y1))
+#val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+val_dataset = val_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
+val_dataset = val_dataset.map(lambda x1, y1: trans(x1,y1))
 
 # calculate number of steps for learning rate decay
-decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
+decay_steps = config.args.epochs * len(train_dataset)
 
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
