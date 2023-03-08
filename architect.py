@@ -21,6 +21,8 @@ class Architect():
                 loss = self._backward_step(x_valid, y_valid)
             grads_normal = gt.gradient(loss, self.model.alphas_normal)
             grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
+        self.model.alphas_normal.assign_sub(self.model.alphas_normal * 1e-3 * xi)
+        self.model.alphas_reduce.assign_sub(self.model.alphas_reduce * 1e-3 * xi)
         self.optimizer.apply_gradients(zip([grads_normal, grads_reduce], [self.model.alphas_normal, self.model.alphas_reduce]))
 
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
