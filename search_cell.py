@@ -39,7 +39,7 @@ def train_step(x_batch_train, y_batch_train):
 
 @tf.function
 def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
-    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=optimizer.lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
+    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)

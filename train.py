@@ -113,7 +113,6 @@ for epoch in range(config.args.epochs):
         lr_step += 1
 
         if (step + 1) % 100 == 0:
-            model.summary()
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')

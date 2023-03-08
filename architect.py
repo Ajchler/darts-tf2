@@ -89,9 +89,8 @@ class Architect():
             loss = self.model._loss(x_train, y_train, training=True)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
-        try:
-            moment = net_optimizer.momentums
-        except:
+        moment = net_optimizer.variables()[1:]
+        if not moment:
             moment = [0] * len(grads)
 
         for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, moment, grads)):
