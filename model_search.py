@@ -12,7 +12,7 @@ class MixedOp(keras.layers.Layer):
             op = OP_DICT[prim](C_curr, C_prev, stride, approx)
             self._ops.append(op)
 
-    def call(self, x, weights):
+    def call(self, x, weights, training=None):
         weights = tf.reshape(weights, [len(PRIMITIVES), 1, 1, 1, 1])
         ops = [op(x) for op in self._ops]
         return tf.reduce_sum(ops * weights, axis=0)
@@ -38,7 +38,7 @@ class Cell(keras.layers.Layer):
                 stride = [2,2] if reduction and j < 2 else [1,1]
                 self._ops.append(MixedOp(C_curr, C_prev, stride, approx))
 
-    def call(self, s0, s1, weights):
+    def call(self, s0, s1, weights, training=None):
         s0 = self.preprocess0(s0)
         s1 = self.preprocess1(s1)
 
@@ -94,7 +94,7 @@ class Network(keras.Model):
             x.data.copy_(y.data)
         return new_model
 
-    def call(self, x):
+    def call(self, x, training=None):
         op = self.stem_1(x)
         op = self.stem_2(op)
         s0 = s1 = op

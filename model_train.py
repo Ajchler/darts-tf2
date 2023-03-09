@@ -16,7 +16,7 @@ class AuxiliaryHeadCifar(keras.layers.Layer):
         self.relu3 = keras.layers.ReLU()
         self.criterion = keras.layers.Dense(n_classes)
 
-    def call(self, x):
+    def call(self, x, training=None):
         x = self.relu1(x)
         x = self.avg_pool(x)
         x = self.conv1(x)
@@ -53,7 +53,7 @@ class Cell(keras.layers.Layer):
                 self.ops.append(OP_DICT[op[0]](C_curr, C_prev, stride, approx))
                 self.indices.append(op[1])
 
-    def call(self, s0, s1):
+    def call(self, s0, s1, training=None):
         s0 = self.preprocess0(s0)
         s1 = self.preprocess1(s1)
 
