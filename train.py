@@ -57,9 +57,7 @@ def trans(x, y):
 (x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
 
 x_train = x_train / 255
-y_train = y_train
 x_test = x_test / 255
-y_test = y_test
 
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=50000).batch(config.args.batch_size)

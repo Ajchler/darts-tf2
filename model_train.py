@@ -114,7 +114,7 @@ class Network(keras.Model):
             x.data.copy_(y.data)
         return new_model
 
-    def call(self, x, training=True):
+    def call(self, x, training=None):
         logits_aux = None
         op = self.stem_1(x)
         op = self.stem_2(op)
