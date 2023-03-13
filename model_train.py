@@ -120,10 +120,10 @@ class Network(keras.Model):
         op = self.stem_2(op)
         s0 = s1 = op
         for i, cell in enumerate(self.cells):
-            s0, s1 = s1, cell(s0, s1)
+            s0, s1 = s1, cell(s0, s1, training=training)
             if i == (2 * self._n_layers // 3):
                 if self._auxiliary and training:
-                    logits_aux = self.auxiliary_head(s1)
+                    logits_aux = self.auxiliary_head(s1, training=training)
 
         out = self.global_pooling(s1)
         logits = self.classifier(out)
