@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import tensorflow_addons as tfa
 from model_search import *
 from config import Config
 from architect import Architect
@@ -13,18 +14,24 @@ tf.get_logger().setLevel('INFO')
 
 @tf.function
 def validation_step(x_batch_valid, y_batch_valid):
-        logits = model(x_batch_valid, training=False)
-        loss = criterion(y_batch_valid, logits)
-        validation_acc.update_state(y_batch_valid, logits)
-        valid_loss.update_state(y_batch_valid, logits)
-        return loss
+    logits = model(x_batch_valid, training=False)
+    loss = criterion(y_batch_valid, logits)
+    validation_acc.update_state(y_batch_valid, logits)
+    valid_loss.update_state(y_batch_valid, logits)
+    return loss
 
 @tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
         logits = model(x_batch_train, training=True) # maybe use training=True?
         loss = criterion(y_batch_train, logits)
+
     grads = tape.gradient(loss, model.trainable_weights)
+    grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
+    #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
+    # To replicate using weight decay in optimizer use this:TODO: use this in train.py as well
+    for var in model.trainable_weights:
+        var.assign_sub(var * config.args.weight_decay * lr)
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -40,22 +47,40 @@ def current_lr(step, decay_steps, alpha, initial_lr):
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
+def trans(x_train, y_train):
+    x_train = tf.image.resize_with_pad(x_train, 40, 40)
+    x_train = keras.layers.RandomCrop(32, 32)(x_train)
+    x_train = keras.layers.RandomFlip("horizontal")(x_train)
+
+    return x_train, y_train
+
 config = Config('search')
 tf.random.set_seed(config.args.seed)
 
 # dataset handling
-(x_train, y_train), (x_test, y_test) = data_utils.load_cifar10()
-x_train = x_train / 255
-y_train = y_train
-x_test = x_test / 255
-y_test = y_test
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
-val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-val_dataset = val_dataset.shuffle(buffer_size=1000).batch(config.args.batch_size)
+(x, y), (x_, y_) = data_utils.load_cifar10()
+#x_train = x[:len(x) // 2]
+#x_test = x[len(x) // 2:]
+#y_train = y[:len(y) // 2]
+#y_test = y[len(y) // 2:]
+#x_train = x_train / 255
+#y_train = y_train
+#x_test = x_test / 255
+#y_test = y_test
+x = x / 255
+
+dataset = tf.data.Dataset.from_tensor_slices((x, y))
+dataset = dataset.shuffle(buffer_size=50000)
+train_dataset = dataset.take(25000)
+val_dataset = dataset.skip(25000).take(25000)
+train_dataset = train_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
+train_dataset = train_dataset.map(lambda x1, y1: trans(x1, y1))
+#val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
+val_dataset = val_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
+val_dataset = val_dataset.map(lambda x1, y1: trans(x1,y1))
 
 # calculate number of steps for learning rate decay
-decay_steps = config.args.epochs * len(x_train) // config.args.batch_size
+decay_steps = config.args.epochs * len(train_dataset)
 
 # Initialize learing rate scheduler, loss function and optimizer
 lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
@@ -63,7 +88,7 @@ criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, approx=config.args.approx)
 architect = Architect(model, config.args, criterion)
 
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
@@ -93,13 +118,14 @@ with open(f"{train_log_dir}/genotype_initial", 'w') as genotype_file:
 with open(f"{train_log_dir}/config", 'w') as config_file:
     config_file.write(str(config.args))
 print(f"Initial genotype: {best_genotype}")
-print(f"Initial alphas: {model.arch_params()}")
+print(f"Initial alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 
 for epoch in range(config.args.epochs):
     # training
-    for step, (x_batch_train, y_batch_train) in enumerate(train_dataset):
-        x_batch_valid, y_batch_valid = next(iter(val_dataset))
+    for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
         # eta needs to be changed to learning rate scheduler
+        if epoch == 0 and step == 0:
+            architect.v_model._loss(x_batch_valid, y_batch_valid)
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
         loss = train_step(x_batch_train, y_batch_train)
@@ -110,7 +136,10 @@ for epoch in range(config.args.epochs):
             print(f'Epoch: {epoch + 1}')
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
-            print(f"Loss is: {loss}\n")
+            print(f"Loss is: {loss}")
+            print(f"Learning rate: {optimizer.lr}")
+            print(f"My learning rate: {lr}\n")
+
 
     with train_summary_writer.as_default():
         tf.summary.scalar('loss', train_loss.result(), step=epoch)
@@ -144,7 +173,7 @@ for epoch in range(config.args.epochs):
     print(f"End of epoch {epoch + 1}")
     print(f"Validation accuracy: {float(val_acc)}")
     print(f"Genotype: {model.genotypes()}")
-    print(f"Alphas: {model.arch_params()}\n\n")
+    print(f"Alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}\n\n")
 
     train_loss.reset_states()
     valid_loss.reset_states()
@@ -154,7 +183,7 @@ for epoch in range(config.args.epochs):
 # end of architecture search
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
-print(f"Alphas: {model.arch_params()}")
+print(f"Alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 model.summary()
 with open(f"{train_log_dir}/genotype_best", 'w') as genotype_file:
     genotype_file.write(str(best_genotype))

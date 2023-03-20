@@ -1,14 +1,63 @@
 import tensorflow as tf
 import tensorflow.keras as keras
+#from python.keras.layers.fake_convolutional import FakeApproxConv2D
+
+#OP_DICT = {
+#    'none': lambda C, stride: Zero(stride),
+#    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
+#    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
+#    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
+#    'rel_attention': lambda C, stride: RelAttention(C, stride),
+#    'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
+#}
 
 OP_DICT = {
-    'none': lambda C, stride: Zero(stride),
-    'conv_3x3': lambda C, stride: Conv(C, stride, kernel_size=3, padding='same'),
-    'conv_1x1': lambda C, stride: Conv(C, stride, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, stride: MBConv(C, C, stride, kernel_size=3),
-    'rel_attention': lambda C, stride: RelAttention(C, stride),
-    'ffn': lambda C, stride: FeedForwardNet(C, C, stride)
+    'none' : lambda C_curr, C_prev, stride, approx: Zero(stride),
+    'avg_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.AveragePooling2D(3, strides=stride, padding='same'),
+    'max_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.MaxPool2D(3, strides=stride, padding='same'),
+    'skip_connect' : lambda C_curr, C_prev, stride, approx: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
+    #'sep_conv_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 3, stride),
+    #'sep_conv_5x5' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 5, stride),
+    'sep_conv_3x3' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 3, stride, approx),
+    'sep_conv_5x5' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 5, stride, approx),
+    #'sep_conv_7x7' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=7, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 7, stride),
+    #'dil_conv_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 3, stride, 2),
+    #'dil_conv_5x5' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 5, stride, 2),
+    'dil_conv_3x3' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 3, stride, 2, approx),
+    'dil_conv_5x5' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 5, stride, 2, approx),
 }
+
+class DilConv(keras.layers.Layer):
+    def __init__(self, C_curr, kernel_size, stride, rate, approx):
+        super().__init__()
+        self.relu = keras.layers.ReLU()
+        #if approx:
+        #    self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, 'same')
+        #else:
+        self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size, stride, dilation_rate=rate, padding='same')
+        self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x, training=None):
+        x = self.relu(x)
+        x = self.sep_conv(x)
+        x = self.bn(x)
+        return x
+
+class SepConv(keras.layers.Layer):
+    def __init__(self, C_curr, kernel_size, stride, approx):
+        super().__init__()
+        self.relu = keras.layers.ReLU()
+        #if approx:
+        #    self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, 'same')
+        #else:
+        self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size=kernel_size, strides=stride, padding='same')
+        self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x, training=None):
+        x = self.relu(x)
+        x = self.sep_conv(x)
+        x = self.bn(x)
+        return x
 
 class RelAttention(keras.layers.Layer):
     def __init__(self, C_curr, stride, conv_short_cut=True, head_dim=32, drop_rate=0, activation='gelu'):
@@ -56,12 +105,19 @@ class FeedForwardNet(keras.layers.Layer):
         op = self.dense_2(op)
         return self.maxpool(op)
 
+class Identity(keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, x, training=None):
+        return x
+
 class Zero(keras.layers.Layer):
     def __init__(self, stride):
         super().__init__()
         self.stride = stride
 
-    def call(self, x):
+    def call(self, x, training=None):
         return tf.zeros_like(x)[:, ::self.stride[0], ::self.stride[1], :]
 
 class SEBlock(keras.layers.Layer):
@@ -141,7 +197,7 @@ class ReLUConvBN(keras.layers.Layer):
         self.conv = keras.layers.Conv2D(C_out, kernel_size, stride, padding, use_bias=False)
         self.bn = keras.layers.BatchNormalization(momentum=0.15)
 
-    def call(self, x):
+    def call(self, x, training=None):
         op = self.relu(x)
         op = self.conv(op)
         return self.bn(op)
@@ -155,7 +211,7 @@ class FactorizedReduce(keras.layers.Layer):
         self.conv_2 = keras.layers.Conv2D(C_out // 2, 1, 2, 'valid')
         self.bn = keras.layers.BatchNormalization(momentum=0.15)
 
-    def call(self, x):
+    def call(self, x, training=None):
         x = self.relu(x)
         out = tf.concat([self.conv_1(x), self.conv_2(x[:,1:,1:,:])], -1)
         out = self.bn(out)

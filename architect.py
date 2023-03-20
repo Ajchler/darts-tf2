@@ -9,7 +9,7 @@ class Architect():
         self.model = model
         self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
         self.v_model.set_weights(self.model.get_weights())
-        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)
+        self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)#, weight_decay=1e-3)
 
     def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
         if unrolled:
@@ -21,6 +21,8 @@ class Architect():
                 loss = self._backward_step(x_valid, y_valid)
             grads_normal = gt.gradient(loss, self.model.alphas_normal)
             grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
+        self.model.alphas_normal.assign_sub(self.model.alphas_normal * 1e-3 * xi)
+        self.model.alphas_reduce.assign_sub(self.model.alphas_reduce * 1e-3 * xi)
         self.optimizer.apply_gradients(zip([grads_normal, grads_reduce], [self.model.alphas_normal, self.model.alphas_reduce]))
 
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
@@ -58,7 +60,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_positive_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_positive_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -69,7 +71,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_negative_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_negative_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -86,15 +88,19 @@ class Architect():
 
     def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         with tf.GradientTape() as gt:
-            loss = self.model._loss(x_train, y_train)
+            loss = self.model._loss(x_train, y_train, training=True)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
-        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, net_optimizer.weights[1:], grads)):
+        moment = net_optimizer.variables()[1:]
+        if not moment:
+            moment = [0] * len(grads)
+
+        for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, moment, grads)):
             # m is momentum of optmizier
-            self.v_model.weights[idx] = tf.math.subtract(w, tf.math.multiply(xi, tf.math.add(tf.math.add(m, g), tf.math.multiply(self.weight_decay, w))))
+            self.v_model.trainable_weights[idx].assign(w - xi * ( m * self.momentum + g + self.weight_decay * w))
 
         for idx, a in enumerate(self.model._arch_params):
-            self.v_model._arch_params[idx] = a
+            self.v_model._arch_params[idx].assign(a)
 
     def _backward_step(self, input_valid, target_valid):
-        return self.model._loss(input_valid, target_valid)
+        return self.model._loss(input_valid, target_valid, training=True)
