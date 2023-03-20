@@ -35,7 +35,7 @@ class SepConv(keras.layers.Layer):
     def __init__(self, C_curr, C_prev, kernel_size, stride, approx):
         super().__init__()
         self.relu = keras.layers.ReLU()
-        self.dw = ApproxDepthwiseConv2DWithMinMaxVars(C_prev, kernel_size, stride, padding='same')
+        self.dw = ApproxDepthwiseConv2DWithMinMaxVars(kernel_size, stride, padding='same')
         self.pw = ApproxConv2DWithMinMaxVars(C_curr, 1, padding='same')
         self.bn = keras.layers.BatchNormalization()
 
