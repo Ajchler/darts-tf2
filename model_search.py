@@ -1,9 +1,8 @@
 from genotypes import PRIMITIVES, Genotype
 from operations import *
 import tensorflow as tf
-import tensorflow.keras as keras
 
-class MixedOp(keras.layers.Layer):
+class MixedOp(tf.keras.layers.Layer):
     def __init__(self, C_curr, C_prev, stride, approx):
         super().__init__()
         self.stride = stride
@@ -18,7 +17,7 @@ class MixedOp(keras.layers.Layer):
         return tf.reduce_sum(ops * weights, axis=0)
         #return tf.math.add_n(tf.math.multiply(w, op(x)) for w, op in zip(weights, self._ops))
 
-class Cell(keras.layers.Layer):
+class Cell(tf.keras.layers.Layer):
     def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, approx):
         super().__init__()
         self._reduction_prev = reduction_prev
@@ -51,7 +50,7 @@ class Cell(keras.layers.Layer):
 
         return tf.concat(states[-self._multiplier:], -1)
 
-class Network(keras.Model):
+class Network(tf.keras.Model):
     def __init__(self, C, criterion, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3, approx=False):
         super(Network, self).__init__()
         self._C = C
@@ -62,8 +61,8 @@ class Network(keras.Model):
         self._criterion = criterion
 
         C_curr = C * stem_multiplier
-        self.stem_1 = keras.layers.Conv2D(C_curr, kernel_size=(3,3), strides=(1,1), padding='same', use_bias=False)
-        self.stem_2 = keras.layers.BatchNormalization()
+        self.stem_1 = tf.keras.layers.Conv2D(C_curr, kernel_size=(3,3), strides=(1,1), padding='same', use_bias=False)
+        self.stem_2 = tf.keras.layers.BatchNormalization()
 
         C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
 

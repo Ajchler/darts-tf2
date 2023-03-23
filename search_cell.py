@@ -1,6 +1,5 @@
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as keras
 import tensorflow_addons as tfa
 from model_search import *
 from config import Config
@@ -49,8 +48,8 @@ def current_lr(step, decay_steps, alpha, initial_lr):
 
 def trans(x_train, y_train):
     x_train = tf.image.resize_with_pad(x_train, 40, 40)
-    x_train = keras.layers.RandomCrop(32, 32)(x_train)
-    x_train = keras.layers.RandomFlip("horizontal")(x_train)
+    x_train = tf.keras.layers.RandomCrop(32, 32)(x_train)
+    x_train = tf.keras.layers.RandomFlip("horizontal")(x_train)
 
     return x_train, y_train
 
@@ -83,9 +82,9 @@ val_dataset = val_dataset.map(lambda x1, y1: trans(x1,y1))
 decay_steps = config.args.epochs * len(train_dataset)
 
 # Initialize learing rate scheduler, loss function and optimizer
-lr_scheduler = keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
-criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
+lr_scheduler = tf.keras.experimental.CosineDecay(config.args.learning_rate, decay_steps, config.args.learning_rate_min)
+criterion = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+optimizer = tf.keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 # Create a model and an architect
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, approx=config.args.approx)
@@ -98,10 +97,10 @@ lr = tf.cast(config.args.learning_rate, tf.float32)
 lr_step = 0
 
 # Initialize metrics
-train_loss = keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
-train_acc = keras.metrics.SparseCategoricalAccuracy()
-valid_loss = keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
-validation_acc = keras.metrics.SparseCategoricalAccuracy()
+train_loss = tf.keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
+train_acc = tf.keras.metrics.SparseCategoricalAccuracy()
+valid_loss = tf.keras.metrics.SparseCategoricalCrossentropy(from_logits=True)
+validation_acc = tf.keras.metrics.SparseCategoricalAccuracy()
 best_acc = 0
 best_genotype = model.genotypes()
 
