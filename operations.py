@@ -4,7 +4,6 @@ import tensorflow.keras as keras
 
 OP_DICT = {
     'none': lambda C, _, stride, approx: Zero(stride),
-    'conv_3x3': lambda C, _, stride, approx: Conv(C, stride, kernel_size=3, padding='same'),
     'conv_1x1': lambda C, _, stride, approx: Conv(C, stride, kernel_size=1, padding='valid'),
     'dconv_3x3': lambda C, _, stride, approx: SepConv(C, 5, stride, approx),
     'rel_attention': lambda C, _, stride, approx: RelAttention(C, stride),
