@@ -34,12 +34,14 @@ class DilConv(keras.layers.Layer):
         #if approx:
         #    self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, 'same')
         #else:
-        self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size, stride, dilation_rate=rate, padding='same')
+        self.dw = keras.layers.DepthwiseConv2D(kernel_size, (1, 1), dilation_rate=rate, padding='same')
+        self.pw = keras.layers.Conv2D(C_curr, 1, stride, padding='same')
         self.bn = keras.layers.BatchNormalization()
 
     def call(self, x, training=None):
         x = self.relu(x)
-        x = self.sep_conv(x)
+        x = self.dw(x)
+        x = self.pw(x)
         x = self.bn(x)
         return x
 
