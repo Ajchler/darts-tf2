@@ -21,12 +21,14 @@ class DilConv(tf.keras.layers.Layer):
     def __init__(self, C_curr, kernel_size, stride, rate, approx):
         super().__init__()
         self.relu = tf.keras.layers.ReLU()
-        self.sep_conv = FakeApproxConv2D(C_curr, kernel_size, stride, dilation_rate=rate, padding='same', approx_mul_table_file='mul8u_1JFF.bin')
+        self.dil_conv = FakeApproxConv2D(C_curr, kernel_size, (1, 1), dilation_rate=rate, padding='same', approx_mul_table_file='mul8u_1JFF.bin')
+        self.conv = FakeApproxConv2D(C_curr, 1, strides=stride, padding='same', approx_mul_table_file='mul8u_1JFF.bin')
         self.bn = tf.keras.layers.BatchNormalization()
 
     def call(self, x, training=None):
         x = self.relu(x)
-        x = self.sep_conv(x)
+        x = self.dil_conv(x)
+        x = self.conv(x)
         x = self.bn(x)
         return x
 
