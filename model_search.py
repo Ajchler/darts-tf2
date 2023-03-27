@@ -3,12 +3,12 @@ from operations import *
 import tensorflow as tf
 
 class MixedOp(tf.keras.layers.Layer):
-    def __init__(self, C_curr, C_prev, stride, approx):
+    def __init__(self, C_curr, C_prev, stride):
         super().__init__()
         self.stride = stride
         self._ops = []
         for prim in PRIMITIVES:
-            op = OP_DICT[prim](C_curr, C_prev, stride, approx)
+            op = OP_DICT[prim](C_curr, C_prev, stride, True)
             self._ops.append(op)
 
     def call(self, x, weights, training=None):
@@ -18,7 +18,7 @@ class MixedOp(tf.keras.layers.Layer):
         #return tf.math.add_n(tf.math.multiply(w, op(x)) for w, op in zip(weights, self._ops))
 
 class Cell(tf.keras.layers.Layer):
-    def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, approx):
+    def __init__(self, n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev):
         super().__init__()
         self._reduction_prev = reduction_prev
         self.reduction = reduction
@@ -35,7 +35,7 @@ class Cell(tf.keras.layers.Layer):
         for i in range(self._n_nodes):
             for j in range (i + 2):
                 stride = [2,2] if reduction and j < 2 else [1,1]
-                self._ops.append(MixedOp(C_curr, C_prev, stride, approx))
+                self._ops.append(MixedOp(C_curr, C_prev, stride))
 
     def call(self, s0, s1, weights, training=None):
         s0 = self.preprocess0(s0)
@@ -51,7 +51,7 @@ class Cell(tf.keras.layers.Layer):
         return tf.concat(states[-self._multiplier:], -1)
 
 class Network(tf.keras.Model):
-    def __init__(self, C, criterion, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3, approx=False):
+    def __init__(self, C, criterion, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
         super(Network, self).__init__()
         self._C = C
         self._n_classes = n_classes
@@ -75,7 +75,7 @@ class Network(tf.keras.Model):
             else:
                 reduction = False
 
-            cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev, approx)
+            cell = Cell(n_nodes, multiplier, C_curr, C_prev, C_prev_prev, reduction, reduction_prev)
             reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * self._multiplier

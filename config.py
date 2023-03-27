@@ -22,7 +22,6 @@ class Config:
         parser.add_argument('--nodes', type=int, default=4, help='number of inner nodes (states)')
         parser.add_argument('--multiplier', type=int, default=4, help='multiplier')
         parser.add_argument('--grad_clip', type=int, default=5, help='gradient clipping')
-        parser.add_argument('--approx', action='store_true', default=False, help='use approx convolutions')
         if type == 'train':
             parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary head')
             parser.add_argument('--genotype_file', required=True, help='genotype to build network from')
