@@ -1,5 +1,5 @@
 import tensorflow as tf
-from keras.layers.fake_convolutional import FakeApproxConv2D, FakeApproxDepthwiseConv2D
+from python.keras.layers.fake_convolutional import FakeApproxConv2D, FakeApproxDepthwiseConv2D
 
 OP_DICT = {
     'none' : lambda C_curr, C_prev, stride, approx: Zero(stride),
