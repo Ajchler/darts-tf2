@@ -12,23 +12,51 @@ import tensorflow.keras as keras
 #}
 
 OP_DICT = {
-    'none' : lambda C_curr, C_prev, stride, approx: Zero(stride),
-    'avg_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.AveragePooling2D(3, strides=stride, padding='same'),
-    'max_pool_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.MaxPool2D(3, strides=stride, padding='same'),
-    'skip_connect' : lambda C_curr, C_prev, stride, approx: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
+    'none' : lambda C_curr, C_prev, stride, normalize: Zero(stride),
+    'avg_pool_3x3' : lambda C_curr, C_prev, stride, normalize: AvgPool(3, stride=stride, normalize=normalize),
+    'max_pool_3x3' : lambda C_curr, C_prev, stride, normalize: MaxPool(3, stride=stride, normalize=normalize),
+    'skip_connect' : lambda C_curr, C_prev, stride, normalize: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
     #'sep_conv_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 3, stride),
     #'sep_conv_5x5' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 5, stride),
-    'sep_conv_3x3' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 3, stride, approx),
-    'sep_conv_5x5' : lambda C_curr, C_prev, stride, approx: SepConv(C_curr, 5, stride, approx),
+    'sep_conv_3x3' : lambda C_curr, C_prev, stride, normalize: SepConv(C_curr, 3, stride),
+    'sep_conv_5x5' : lambda C_curr, C_prev, stride, normalize: SepConv(C_curr, 5, stride),
     #'sep_conv_7x7' : lambda C_curr, C_prev, stride: keras.layers.SeparableConv2D(C_curr, kernel_size=7, strides=stride, padding='same'),#SepConv(C_curr, C_prev, 7, stride),
     #'dil_conv_3x3' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=3, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 3, stride, 2),
     #'dil_conv_5x5' : lambda C_curr, C_prev, stride, approx: keras.layers.SeparableConv2D(C_curr, kernel_size=5, strides=stride, padding='same', dilation_rate=2),#DilConv(C_curr, 5, stride, 2),
-    'dil_conv_3x3' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 3, stride, 2, approx),
-    'dil_conv_5x5' : lambda C_curr, C_prev, stride, approx: DilConv(C_curr, 5, stride, 2, approx),
+    'dil_conv_3x3' : lambda C_curr, C_prev, stride, normalize: DilConv(C_curr, 3, stride, 2),
+    'dil_conv_5x5' : lambda C_curr, C_prev, stride, normalize: DilConv(C_curr, 5, stride, 2),
 }
 
+class AvgPool(keras.layers.Layer):
+    def __init__(self, kernel_size, stride, normalize):
+        super().__init__()
+        self.normalize = normalize
+        self.pool = keras.layers.AveragePooling2D(kernel_size, strides=stride, padding='same')
+        if normalize:
+            self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x, training=None):
+        x = self.pool(x)
+        if self.normalize:
+            x = self.bn(x)
+        return x
+
+class MaxPool(keras.layers.Layer):
+    def __init__(self, kernel_size, stride, normalize):
+        super().__init__()
+        self.normalize = normalize
+        self.pool = keras.layers.MaxPooling2D(kernel_size, strides=stride, padding='same')
+        if normalize:
+            self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x, training=None):
+        x = self.pool(x)
+        if self.normalize:
+            x = self.bn(x)
+        return x
+
 class DilConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, rate, approx):
+    def __init__(self, C_curr, kernel_size, stride, rate):
         super().__init__()
         self.relu = keras.layers.ReLU()
         #if approx:
@@ -46,7 +74,7 @@ class DilConv(keras.layers.Layer):
         return x
 
 class SepConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, approx):
+    def __init__(self, C_curr, kernel_size, stride):
         super().__init__()
         self.relu = keras.layers.ReLU()
         #if approx:
