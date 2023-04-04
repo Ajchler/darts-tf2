@@ -42,7 +42,7 @@ class MaxPool(tf.keras.layers.Layer):
         return x
 
 class DilConv(tf.keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, rate, approx):
+    def __init__(self, C_curr, kernel_size, stride, rate):
         super().__init__()
         self.relu = tf.keras.layers.ReLU()
         self.dw = FakeApproxDepthwiseConv2D(kernel_size, (1, 1), dilation_rate=rate,padding='same', approx_mul_table_file='mul8u_1JFF.bin')
@@ -57,7 +57,7 @@ class DilConv(tf.keras.layers.Layer):
         return x
 
 class SepConv(tf.keras.layers.Layer):
-    def __init__(self, C_curr, C_prev, kernel_size, stride, approx):
+    def __init__(self, C_curr, kernel_size, stride):
         super().__init__()
         self.relu = tf.keras.layers.ReLU()
         self.dw = FakeApproxDepthwiseConv2D(kernel_size, stride, padding='same', approx_mul_table_file='mul8u_1JFF.bin')
