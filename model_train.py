@@ -29,7 +29,7 @@ class AuxiliaryHeadCifar(keras.layers.Layer):
         return x
 
 class Cell(keras.layers.Layer):
-    def __init__(self, n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate, approx):
+    def __init__(self, n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate):
         super().__init__()
         self._reduction_prev = reduction_prev
         self.reduction = reduction
@@ -50,7 +50,7 @@ class Cell(keras.layers.Layer):
         for edges in gene:
             for op in edges:
                 stride = [2, 2] if reduction and op[1] < 2 else [1, 1]
-                self.ops.append(OP_DICT[op[0]](C_curr, C_prev, stride, approx))
+                self.ops.append(OP_DICT[op[0]](C_curr, C_prev, stride, False))
                 self.indices.append(op[1])
 
     def call(self, s0, s1, training=None):
@@ -70,7 +70,7 @@ class Cell(keras.layers.Layer):
         return tf.concat([states[i] for i in self.concat], -1)
 
 class Network(keras.Model):
-    def __init__(self, C, criterion, n_classes, n_layers, genotype, drop_rate, n_nodes=4, multiplier=4, stem_multiplier=3, auxiliary=False, approx=False):
+    def __init__(self, C, criterion, n_classes, n_layers, genotype, drop_rate, n_nodes=4, multiplier=4, stem_multiplier=3, auxiliary=False):
         super(Network, self).__init__()
         self._C = C
         self._n_classes = n_classes
@@ -96,7 +96,7 @@ class Network(keras.Model):
             else:
                 reduction = False
 
-            cell = Cell(n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate, approx)
+            cell = Cell(n_nodes, multiplier, C_curr, C_prev, reduction, reduction_prev, genotype, drop_rate)
             reduction_prev = reduction
             self.cells.append(cell)
             C_curr_out = C_curr * self._multiplier

@@ -3,12 +3,13 @@ import tensorflow.keras as keras
 #from python.keras.layers.fake_convolutional import FakeApproxConv2D
 
 OP_DICT = {
-    'none': lambda C, _, stride, approx: Zero(stride),
-    'conv_1x1': lambda C, _, stride, approx: Conv(C, stride, kernel_size=1, padding='valid'),
-    'dconv_3x3': lambda C, _, stride, approx: SepConv(C, 5, stride, approx),
-    'rel_attention': lambda C, _, stride, approx: RelAttention(C, stride),
-    'ffn': lambda C, _, stride, approx: FeedForwardNet(C, C, stride),
-    'skip_connect' : lambda C_curr, C_prev, stride, approx: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
+    'none': lambda C, _, stride, normalize: Zero(stride),
+    'avg_pool_3x3' : lambda C_curr, C_prev, stride, normalize: AvgPool(3, stride=stride, normalize=normalize),
+    'max_pool_3x3' : lambda C_curr, C_prev, stride, normalize: MaxPool(3, stride=stride, normalize=normalize),
+    'sep_conv_3x3': lambda C, _, stride, normalize: SepConv(C, 5, stride),
+    'rel_attention': lambda C, _, stride, normalize: RelAttention(C, stride),
+    'ffn': lambda C, _, stride, normalize: FeedForwardNet(C, C, stride),
+    'skip_connect' : lambda C_curr, C_prev, stride, normalize: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
 }
 
 #OP_DICT = {
@@ -28,7 +29,7 @@ OP_DICT = {
 #}
 
 class DilConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, rate, approx):
+    def __init__(self, C_curr, kernel_size, stride, rate):
         super().__init__()
         self.relu = keras.layers.ReLU()
         #if approx:
@@ -44,7 +45,7 @@ class DilConv(keras.layers.Layer):
         return x
 
 class SepConv(keras.layers.Layer):
-    def __init__(self, C_curr, kernel_size, stride, approx):
+    def __init__(self, C_curr, kernel_size, stride):
         super().__init__()
         self.relu = keras.layers.ReLU()
         #if approx:
@@ -68,30 +69,22 @@ class RelAttention(keras.layers.Layer):
         self.head_dim = head_dim
         self.drop_rate = drop_rate
         self.activation = activation
-        self.head_n = C_curr // head_dim
-        self.head_n = self.head_n if self.head_n > 0 else 1
+        self.head_n = 2
+        #self.head_n = C_curr // head_dim
+        #self.head_n = self.head_n if self.head_n > 0 else 1
 
         self.preact = keras.layers.LayerNormalization(epsilon=1e-5)
-        self.max_pool_1 = keras.layers.MaxPool2D(pool_size=stride, strides=stride, padding='same')
-        self.conv_1 = keras.layers.Conv2D(self.C_curr, kernel_size=[1,1], strides=1, padding='valid', use_bias=False)
         self.max_pool_2 = keras.layers.MaxPool2D(pool_size=2, strides=self.stride, padding='same')
         self.multihead_attn = keras.layers.MultiHeadAttention(self.head_n, self.head_dim, output_shape=C_curr, use_bias=False)
         #self.dropout = keras.layers.Dropout(self.drop_rate)
-        self.add = keras.layers.Add()
 
     def call(self, x):
         preact = self.preact(x)
-        if self.conv_short_cut:
-            shortcut = self.max_pool_1(x) if self.stride[0] > 1 else x
-            shortcut = self.conv_1(shortcut)
-        else:
-            shortcut = x
-
         if self.stride != 1:
             op = self.max_pool_2(preact)
         op = self.multihead_attn(op, op)
         #op = self.dropout(op)
-        return self.add([shortcut, op])
+        return op
 
 class FeedForwardNet(keras.layers.Layer):
     def __init__(self, C_curr, C_out, stride):
@@ -120,65 +113,33 @@ class Zero(keras.layers.Layer):
     def call(self, x, training=None):
         return tf.zeros_like(x)[:, ::self.stride[0], ::self.stride[1], :]
 
-class SEBlock(keras.layers.Layer):
-    def __init__(self, C_curr, ratio=0.25):
+class AvgPool(keras.layers.Layer):
+    def __init__(self, kernel_size, stride, normalize):
         super().__init__()
-        self._reduced_channels = max(1, int(C_curr * ratio))
-        self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
-        self.reduce_conv = tf.keras.layers.Conv2D(self._reduced_channels, kernel_size=1, strides=1, padding='same')
-        self.expand_conv = tf.keras.layers.Conv2D(C_curr, kernel_size=1, strides=1, padding='same')
+        self.normalize = normalize
+        self.pool = keras.layers.AveragePooling2D(kernel_size, strides=stride, padding='same')
+        if normalize:
+            self.bn = keras.layers.BatchNormalization()
 
-    def call(self, x):
-        out = self.global_pooling(x)
-        out = tf.expand_dims(out, axis=1)
-        out = tf.expand_dims(out, axis=1)
-        out = self.reduce_conv(out)
-        out = tf.math.multiply(out, tf.nn.sigmoid(out))
-        out = self.expand_conv(out)
-        out = tf.nn.sigmoid(out)
-        return tf.math.multiply(x, out)
+    def call(self, x, training=None):
+        x = self.pool(x)
+        if self.normalize:
+            x = self.bn(x)
+        return x
 
-class MBConv(keras.layers.Layer):
-    def __init__(self, C_curr, C_out, stride, kernel_size, expand_ratio=1, drop_connect_rate=None):
+class MaxPool(keras.layers.Layer):
+    def __init__(self, kernel_size, stride, normalize):
         super().__init__()
-        self._stride = stride
-        self._C_curr = C_curr
-        self._C_out = C_out
-        self._stride = stride
-        self._drop_connect_rate = drop_connect_rate
+        self.normalize = normalize
+        self.pool = keras.layers.MaxPooling2D(kernel_size, strides=stride, padding='same')
+        if normalize:
+            self.bn = keras.layers.BatchNormalization()
 
-        self.conv_1 = keras.layers.Conv2D(C_curr * expand_ratio, 1, 1, padding='same')
-        self.bn_1 = keras.layers.BatchNormalization()
-        self.depth_wise_conv = keras.layers.DepthwiseConv2D(kernel_size, stride, 'same')
-        self.bn_2 = keras.layers.BatchNormalization()
-        self.se_block = SEBlock(C_curr * expand_ratio)
-        self.conv_2 = keras.layers.Conv2D(C_out, 1, 1, padding='same')
-        self.bn_3 = keras.layers.BatchNormalization()
-        self.add = keras.layers.Add()
-
-        # dropout is probably useless since this value will probably never be
-        # used, but in case it was in some of the experiments, it stays for now
-        self.dropout = keras.layers.Dropout(drop_connect_rate)
-
-    def call(self, x):
-        out = self.conv_1(x)
-        out = self.bn_1(out)
-        out = tf.nn.gelu(out, approximate=True)
-        out = tf.math.multiply(out, tf.sigmoid(out))
-        out = self.depth_wise_conv(out)
-        out = self.bn_2(out)
-        out = tf.nn.gelu(out, approximate=True)
-        out = self.se_block(out)
-        out = tf.math.multiply(out, tf.sigmoid(out))
-        out = self.conv_2(out)
-        #out = self.bn_3(out)
-        #out = tf.nn.gelu(out, approximate=True)
-
-        if self._stride == 1 and self._C_curr == self._C_out:
-            if self._drop_connect_rate:
-                out = self.dropout(out)
-            out = self.add([out, x])
-        return out
+    def call(self, x, training=None):
+        x = self.pool(x)
+        if self.normalize:
+            x = self.bn(x)
+        return x
 
 class Conv(keras.layers.Layer):
     def __init__(self, C_out, stride, kernel_size, padding):

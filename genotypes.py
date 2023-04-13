@@ -15,10 +15,11 @@ Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat')
 #]
 
 PRIMITIVES = [
-    'dconv_3x3',
-    'conv_1x1',
+    'sep_conv_3x3',
     'rel_attention',
     'ffn',
     'none',
-    'skip_connect'
+    'skip_connect',
+    'avg_pool_3x3',
+    'max_pool_3x3'
 ]

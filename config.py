@@ -19,10 +19,9 @@ class Config:
         parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
         parser.add_argument('--learning_rate_min', type=float, default=0.04, help='learning rate')
         parser.add_argument('--layers', type=int, default=5, help='number of layers (sequential cells)')
-        parser.add_argument('--nodes', type=int, default=4, help='number of inner nodes (states)')
-        parser.add_argument('--multiplier', type=int, default=4, help='multiplier')
+        parser.add_argument('--nodes', type=int, default=3, help='number of inner nodes (states)')
+        parser.add_argument('--multiplier', type=int, default=3, help='multiplier')
         parser.add_argument('--grad_clip', type=int, default=5, help='gradient clipping')
-        parser.add_argument('--approx', action='store_true', default=False, help='use approx convolutions')
         if type == 'train':
             parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary head')
             parser.add_argument('--genotype_file', required=True, help='genotype to build network from')

@@ -88,7 +88,7 @@ criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier, approx=config.args.approx)
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
 architect = Architect(model, config.args, criterion)
 
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
