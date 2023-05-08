@@ -1,5 +1,6 @@
 """
-Module providing many operations used in preprocessing and in search space
+Module providing many operations used in preprocessing and in search space, Attention and
+Feed-Forward operations are inspired by CoAtNet article: https://arxiv.org/abs/2106.04803.
 
 This code is part of reimplementation of original DARTS
 and is based on it, the original implementation
@@ -14,15 +15,136 @@ import tensorflow as tf
 import tensorflow.keras as keras
 
 OP_DICT = {
-    'none' : lambda C_curr, stride, normalize: Zero(stride),
+    'none': lambda C_curr, stride, normalize: Zero(stride),
     'avg_pool_3x3' : lambda C_curr, stride, normalize: AvgPool(3, stride=stride, normalize=normalize),
     'max_pool_3x3' : lambda C_curr, stride, normalize: MaxPool(3, stride=stride, normalize=normalize),
+    'sep_conv_3x3': lambda C_curr, stride, normalize: SepConv(C_curr, 5, stride),
+    'attention': lambda C_curr, stride, normalize: Attention(C_curr, stride),
+    'ffn': lambda C_curr, stride, normalize: FeedForwardNet(C_curr, C_curr, stride),
     'skip_connect' : lambda C_curr, stride, normalize: Identity() if stride[0] == 1 else FactorizedReduce(C_curr),
-    'sep_conv_3x3' : lambda C_curr, stride, normalize: SepConv(C_curr, 3, stride),
-    'sep_conv_5x5' : lambda C_curr, stride, normalize: SepConv(C_curr, 5, stride),
-    'dil_conv_3x3' : lambda C_curr, stride, normalize: DilConv(C_curr, 3, stride, 2),
-    'dil_conv_5x5' : lambda C_curr, stride, normalize: DilConv(C_curr, 5, stride, 2),
 }
+
+class SepConv(keras.layers.Layer):
+    """Separable convolution operation with ReLU activation
+    at the beginning of the operation and batch normalization at the end
+
+    """
+    def __init__(self, C_curr, kernel_size, stride):
+        super().__init__()
+        self.relu = keras.layers.ReLU()
+        self.sep_conv = keras.layers.SeparableConv2D(C_curr, kernel_size=kernel_size, strides=stride, padding='same')
+        self.bn = keras.layers.BatchNormalization()
+
+    def call(self, x, training=None):
+        """Forward pass method
+
+        Args:
+            x : Input images
+            training : Specify training or inference mode. Defaults to None.
+
+        Returns:
+            Feature maps
+        """
+        x = self.relu(x)
+        x = self.sep_conv(x)
+        x = self.bn(x)
+        return x
+
+class Attention(keras.layers.Layer):
+    """Self-attention operation which is optionally down-sampled by max pooling
+    if stride is 2. This self-attention uses 2 heads
+
+    """
+    def __init__(self, C_curr, stride, head_dim=32, activation='gelu'):
+        super().__init__()
+        self.C_curr = C_curr
+        self.stride = stride
+        self.head_dim = head_dim
+        self.activation = activation
+        self.head_n = 2
+
+        self.preact = keras.layers.LayerNormalization(epsilon=1e-5)
+        self.max_pool_2 = keras.layers.MaxPool2D(pool_size=2, strides=self.stride, padding='same')
+        self.multihead_attn = keras.layers.MultiHeadAttention(self.head_n, self.head_dim, output_shape=C_curr, use_bias=False)
+
+    def call(self, x, training=None):
+        """Forward pass method
+
+        Args:
+            x : Input images
+            training : Specify training or inference mode. Defaults to None.
+
+        Returns:
+            Feature maps
+        """
+        preact = self.preact(x)
+        if self.stride != 1:
+            op = self.max_pool_2(preact)
+        op = self.multihead_attn(op, op)
+        return op
+
+class FeedForwardNet(keras.layers.Layer):
+    """Feed-forward operation using two dense layers and max pooling
+
+    """
+    def __init__(self, C_curr, C_out, stride):
+        super().__init__()
+        self.dense_1 = keras.layers.Dense(C_out, activation='relu')
+        self.dense_2 = keras.layers.Dense(C_curr)
+        self.maxpool = keras.layers.MaxPool2D(1, stride, padding='same')
+
+    def call(self, x, training=None):
+        """Forward pass method
+
+        Args:
+            x : Input images
+            training : Specify training or inference mode. Defaults to None.
+
+        Returns:
+            Feature maps
+        """
+        op = self.dense_1(x)
+        op = self.dense_2(op)
+        return self.maxpool(op)
+
+class Identity(keras.layers.Layer):
+    """Shortcut operation for normal cells
+
+    """
+    def __init__(self):
+        super().__init__()
+
+    def call(self, x, training=None):
+        """Forward pass method
+
+        Args:
+            x : Input images
+            training : Specify training or inference mode. Defaults to None.
+
+        Returns:
+            Feature maps
+        """
+        return x
+
+class Zero(keras.layers.Layer):
+    """Special zero operation representing no connection
+
+    """
+    def __init__(self, stride):
+        super().__init__()
+        self.stride = stride
+
+    def call(self, x, training=None):
+        """Forward pass method
+
+        Args:
+            x : Input images
+            training : Specify training or inference mode. Defaults to None.
+
+        Returns:
+            Feature maps
+        """
+        return tf.zeros_like(x)[:, ::self.stride[0], ::self.stride[1], :]
 
 class AvgPool(keras.layers.Layer):
     """Average pooling operation with batch normalization
@@ -75,102 +197,6 @@ class MaxPool(keras.layers.Layer):
         if self.normalize:
             x = self.bn(x)
         return x
-
-class DilConv(keras.layers.Layer):
-    """Separable convolution operation with dilation applied on depthwise convolution
-    with ReLU activation at the beginning of the operation and batch normalization at the end
-
-    """
-    def __init__(self, C_curr, kernel_size, stride, rate):
-        super().__init__()
-        self.relu = keras.layers.ReLU()
-        self.dw = keras.layers.DepthwiseConv2D(kernel_size, (1, 1), dilation_rate=rate, padding='same')
-        self.pw = keras.layers.Conv2D(C_curr, 1, stride, padding='same')
-        self.bn = keras.layers.BatchNormalization()
-
-    def call(self, x, training=None):
-        """Forward pass method
-
-        Args:
-            x : Input images
-            training : Specify training or inference mode. Defaults to None.
-
-        Returns:
-            Feature maps
-        """
-        x = self.relu(x)
-        x = self.dw(x)
-        x = self.pw(x)
-        x = self.bn(x)
-        return x
-
-class SepConv(keras.layers.Layer):
-    """Separable convolution operation with ReLU activation
-    at the beginning of the operation and batch normalization at the end
-
-    """
-    def __init__(self, C_curr, kernel_size, stride):
-        super().__init__()
-        self.relu = keras.layers.ReLU()
-        self.dw = keras.layers.DepthwiseConv2D(kernel_size, stride, padding='same')
-        self.pw = keras.layers.Conv2D(C_curr, 1, padding='same')
-        self.bn = keras.layers.BatchNormalization()
-
-    def call(self, x, training=None):
-        """Forward pass method
-
-        Args:
-            x : Input images
-            training : Specify training or inference mode. Defaults to None.
-
-        Returns:
-            Feature maps
-        """
-        x = self.relu(x)
-        x = self.dw(x)
-        x = self.pw(x)
-        x = self.bn(x)
-        return x
-
-class Identity(keras.layers.Layer):
-    """Shortcut operation for normal cells
-
-    """
-    def __init__(self):
-        super().__init__()
-
-    def call(self, x, training=None):
-        """Forward pass method
-
-        Args:
-            x : Input images
-            training : Specify training or inference mode. Defaults to None.
-
-        Returns:
-            Feature maps
-        """
-        return x
-
-class Zero(keras.layers.Layer):
-    """Special zero operation representing no connection
-
-    """
-    def __init__(self, stride):
-        super().__init__()
-        self.stride = stride
-
-    def call(self, x, training=None):
-        """Forward pass method
-
-        Args:
-            x : Input images
-            training : Specify training or inference mode. Defaults to None.
-
-        Returns:
-            Feature maps
-        """
-        return tf.zeros_like(x)[:, ::self.stride[0], ::self.stride[1], :]
-
 
 class ReLUConvBN(keras.layers.Layer):
     """Operation which first applies ReLU activation function, then convolution

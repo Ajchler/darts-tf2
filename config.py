@@ -1,9 +1,25 @@
+"""
+Config module managing user arguments and default configuration
+
+This code is part of reimplementation of original DARTS
+and is based on it, the original implementation
+can be found here: https://github.com/quark0/darts
+
+Author: Vojtech Eichler
+Date: April 2023
+"""
+
 import argparse
 import tensorflow as tf
 from functools import partial
 
 class Config:
+    """Config class
+    """
     def __init__(self, type):
+        """Method which initializes arguments parser
+
+        """
         parser = argparse.ArgumentParser('config', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         parser.add_argument = partial(parser.add_argument, help=' ')
         parser.add_argument('--seed', type=int, default=0, help='random seed')

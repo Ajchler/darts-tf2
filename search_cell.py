@@ -1,3 +1,15 @@
+"""
+Script for searching cell architectures
+
+This code is part of reimplementation of original DARTS
+and is based on it, the original implementation
+can be found here: https://github.com/quark0/darts
+and is licensed under Apache 2.0
+
+Author: Vojtech Eichler
+Date: April 2023
+"""
+
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -5,7 +17,6 @@ import tensorflow_addons as tfa
 from model_search import *
 from config import Config
 from architect import Architect
-import data_utils
 import datetime
 
 LOG_DIR='./logs'
@@ -23,15 +34,16 @@ def validation_step(x_batch_valid, y_batch_valid):
 @tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
-        logits = model(x_batch_train, training=True) # maybe use training=True?
+        logits = model(x_batch_train, training=True)
         loss = criterion(y_batch_train, logits)
 
     grads = tape.gradient(loss, model.trainable_weights)
+    # Apply gradient clipping
     grads, _ = tf.clip_by_global_norm(grads, clip_norm=config.args.grad_clip)
-    #grads = [(tf.clip_by_norm(grad, clip_norm=config.args.grad_clip)) for grad in grads]
-    # To replicate using weight decay in optimizer use this:TODO: use this in train.py as well
+    # Apply weight decay
     for var in model.trainable_weights:
         var.assign_sub(var * config.args.weight_decay * lr)
+
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
     train_loss.update_state(y_batch_train, logits)
     train_acc.update_state(y_batch_train, logits)
@@ -41,12 +53,17 @@ def train_step(x_batch_train, y_batch_train):
 def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
     architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
+# This is function taken directly from keras implementation, since current
+# learning rate is needed and in tf-2.8 it's not possible to get it from
+# optimizer object nor from learning rate scheduler, the implementation is
+# taken from: https://www.tensorflow.org/api_docs/python/tf/keras/optimizers/schedules/CosineDecay
 def current_lr(step, decay_steps, alpha, initial_lr):
     step = min(step + 1, decay_steps)
     cosine_decay = 0.5 * (1 + np.cos(np.pi * step / decay_steps))
     decayed = (1 - alpha) * cosine_decay + alpha
     return initial_lr * decayed
 
+# Data augmentation transformations
 def trans(x_train, y_train):
     x_train = tf.image.resize_with_pad(x_train, 40, 40)
     x_train = keras.layers.RandomCrop(32, 32)(x_train)
@@ -57,29 +74,22 @@ def trans(x_train, y_train):
 config = Config('search')
 tf.random.set_seed(config.args.seed)
 
-# dataset handling
-(x, y), (x_, y_) = data_utils.load_cifar10()
-#x_train = x[:len(x) // 2]
-#x_test = x[len(x) // 2:]
-#y_train = y[:len(y) // 2]
-#y_test = y[len(y) // 2:]
-#x_train = x_train / 255
-#y_train = y_train
-#x_test = x_test / 255
-#y_test = y_test
+(x, y), (x_, y_) = keras.datasets.cifar10.load_data()
+
+# Normalize data
 x = x / 255
 
+# Prepare dataset with data augmentation
 dataset = tf.data.Dataset.from_tensor_slices((x, y))
 dataset = dataset.shuffle(buffer_size=50000)
 train_dataset = dataset.take(25000)
 val_dataset = dataset.skip(25000).take(25000)
 train_dataset = train_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
 train_dataset = train_dataset.map(lambda x1, y1: trans(x1, y1))
-#val_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
 val_dataset = val_dataset.shuffle(buffer_size=25000).batch(config.args.batch_size)
 val_dataset = val_dataset.map(lambda x1, y1: trans(x1,y1))
 
-# calculate number of steps for learning rate decay
+# Calculate number of steps for learning rate decay
 decay_steps = config.args.epochs * len(train_dataset)
 
 # Initialize learing rate scheduler, loss function and optimizer
@@ -91,6 +101,7 @@ optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.arg
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
 architect = Architect(model, config.args, criterion)
 
+# Setup tensorboard
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
 tb_callback.set_model(model)
 
@@ -121,11 +132,12 @@ print(f"Initial genotype: {best_genotype}")
 print(f"Initial alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 
 for epoch in range(config.args.epochs):
-    # training
+    # Training
     for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
-        # eta needs to be changed to learning rate scheduler
+        # First build the model
         if epoch == 0 and step == 0:
             architect.v_model._loss(x_batch_valid, y_batch_valid)
+
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
         loss = train_step(x_batch_train, y_batch_train)
@@ -137,8 +149,7 @@ for epoch in range(config.args.epochs):
             print(f'Step: {step + 1}')
             print(f'Number of samples seen: {(step + 1) * config.args.batch_size}')
             print(f"Loss is: {loss}")
-            print(f"Learning rate: {optimizer.lr}")
-            print(f"My learning rate: {lr}\n")
+            print(f"Learning rate: {lr}\n")
 
 
     with train_summary_writer.as_default():
@@ -147,7 +158,7 @@ for epoch in range(config.args.epochs):
 
     trn_acc = train_acc.result()
 
-    # validation
+    # Validation
     for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
         loss = validation_step(x_batch_valid, y_batch_valid)
         if (step + 1) % 100 == 0:
@@ -162,7 +173,7 @@ for epoch in range(config.args.epochs):
         tf.summary.scalar('loss', valid_loss.result(), step=epoch)
         tf.summary.scalar('accuracy', validation_acc.result(), step=epoch)
 
-    # end of epoch logging and updating/reseting metrics
+    # End of epoch logging and updating/reseting metrics
     with open(f"{train_log_dir}/genotype_epoch_{epoch + 1}", 'w') as genotype_file:
         genotype_file.write(str(model.genotypes()))
 
@@ -180,7 +191,7 @@ for epoch in range(config.args.epochs):
     train_acc.reset_states()
     validation_acc.reset_states()
 
-# end of architecture search
+# End of architecture search
 print(f"Best accuracy is: {best_acc}")
 print(f"This was achieved with this genotype: {best_genotype}")
 print(f"Alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
