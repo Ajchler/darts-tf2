@@ -10,7 +10,7 @@ Author: Vojtech Eichler
 Date: April 2023
 """
 
-
+from genotypes import PRIMITIVES, Genotype
 from operations import *
 # For approx experiments uncomment next line:
 #from operations_approx import *

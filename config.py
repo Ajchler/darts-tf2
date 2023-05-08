@@ -4,6 +4,7 @@ Config module managing user arguments and default configuration
 This code is part of reimplementation of original DARTS
 and is based on it, the original implementation
 can be found here: https://github.com/quark0/darts
+and is licensed under Apache 2.0
 
 Author: Vojtech Eichler
 Date: April 2023
