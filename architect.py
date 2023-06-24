@@ -28,8 +28,8 @@ class Architect():
         self.momentum = args.momentum
         self.weight_decay = args.weight_decay
         self.model = model
-        self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
-        self.v_model.set_weights(self.model.get_weights())
+        #self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
+        #self.v_model.set_weights(self.model.get_weights())
         self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)#, weight_decay=1e-3)
 
     def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
@@ -74,17 +74,27 @@ class Architect():
         Returns:
             Gradients for normal and reduction cell architectures
         """
-        self._virtual_step(x_train, y_train, xi, net_optimizer)
+        weights_backup = self._virtual_step(x_train, y_train, xi, net_optimizer)
 
         with tf.GradientTape() as gt:
-            gt.watch(self.v_model.alphas_normal)
-            gt.watch(self.v_model.alphas_reduce)
-            loss = self.v_model._loss(x_valid, y_valid)
+            gt.watch(self.model.alphas_normal)
+            gt.watch(self.model.alphas_reduce)
+            loss = self.model._loss(x_valid, y_valid)
 
-        variables = self.v_model.trainable_weights
-        variables.append(self.v_model.alphas_normal)
-        variables.append(self.v_model.alphas_reduce)
+        #variables = self.v_model.trainable_weights
+        #variables.append(self.v_model.alphas_normal)
+        #variables.append(self.v_model.alphas_reduce)
+        #v_grads = gt.gradient(loss, variables)
+
+        variables = self.model.trainable_weights
+        variables.append(self.model.alphas_normal)
+        variables.append(self.model.alphas_reduce)
         v_grads = gt.gradient(loss, variables)
+
+        # Restore weights
+        for idx, w in enumerate(weights_backup):
+            self.model.weights[idx].assign(weights_backup[idx])
+        #self.model.weights = weights_backup
 
         dalpha = v_grads[-2:] # Architecture weights gradients
         dw = v_grads[:-2] # Layers weights gradients
@@ -159,6 +169,8 @@ class Architect():
             loss = self.model._loss(x_train, y_train, training=True)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
+        weights_backup = self.model.weights
+
         # Get optimizer weights
         moment = net_optimizer.variables()[1:]
         if not moment: # In first step optimizer doesn't have weights initialized yet
@@ -166,11 +178,15 @@ class Architect():
 
         # Perform one training step
         for idx, (w, m, g) in enumerate(zip(self.model.trainable_weights, moment, grads)):
-            self.v_model.trainable_weights[idx].assign(w - xi * ( m * self.momentum + g + self.weight_decay * w))
+            #self.v_model.trainable_weights[idx].assign(w - xi * ( m * self.momentum + g + self.weight_decay * w))
+            self.model.trainable_weights[idx].assign(w - xi * ( m * self.momentum + g + self.weight_decay * w))
 
         # Synchornize architecture weights
         for idx, a in enumerate(self.model._arch_params):
-            self.v_model._arch_params[idx].assign(a)
+            #self.v_model._arch_params[idx].assign(a)
+            self.model._arch_params[idx].assign(a)
+
+        return weights_backup
 
     def _backward_step(self, input_valid, target_valid):
         return self.model._loss(input_valid, target_valid, training=True)
