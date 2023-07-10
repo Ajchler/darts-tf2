@@ -99,7 +99,7 @@ optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.arg
 
 # Create a model and an architect
 model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
-architect = Architect(model, config.args, criterion)
+architect = Architect(model, config.args, criterion, tf.expand_dims(x[0], 0), tf.expand_dims(y[0], 0))
 
 # Setup tensorboard
 tb_callback = tf.keras.callbacks.TensorBoard(LOG_DIR)
@@ -131,13 +131,12 @@ with open(f"{train_log_dir}/config", 'w') as config_file:
 print(f"Initial genotype: {best_genotype}")
 print(f"Initial alphas: {tf.nn.softmax(model.arch_params(), axis=-1)}")
 
+# Build the model
+model.build(input_shape=(None, x.shape[1], x.shape[2], x.shape[3]))
+
 for epoch in range(config.args.epochs):
     # Training
     for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
-        # First build the model
-        #if epoch == 0 and step == 0:
-        #    architect.v_model._loss(x_batch_valid, y_batch_valid)
-
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
         loss = train_step(x_batch_train, y_batch_train)
