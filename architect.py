@@ -55,6 +55,7 @@ class Architect():
                 loss = self._backward_step(x_valid, y_valid)
             grads_normal = gt.gradient(loss, self.model.alphas_normal)
             grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
+
         # Apply weight decay
         self.model.alphas_normal.assign_sub(self.model.alphas_normal * 1e-3 * xi)
         self.model.alphas_reduce.assign_sub(self.model.alphas_reduce * 1e-3 * xi)
@@ -74,10 +75,13 @@ class Architect():
         Returns:
             Gradients for normal and reduction cell architectures
         """
+        # Backup weights, so we can restore them after unrolled step
         self.v_weights = [tf.identity(w) for w in self.model.weights]
 
+        # Perform one step of training
         self._virtual_step(x_train, y_train, xi, net_optimizer)
 
+        # Calculate gradients for architecture weights and weights of layers on validation data
         with tf.GradientTape() as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
@@ -138,6 +142,7 @@ class Architect():
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
             loss = self.model._loss(x_train, y_train, training=True)
+
         dalpha_negative_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_negative_red = gt.gradient(loss, self.model.alphas_reduce)
 
