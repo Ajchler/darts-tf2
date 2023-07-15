@@ -28,11 +28,12 @@ class Architect():
         self.momentum = args.momentum
         self.weight_decay = args.weight_decay
         self.model = model
-        self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
-        self.v_model.set_weights(self.model.get_weights())
+        if args.unrolled:
+            self.v_model = Network(args.init_channels, criterion, 10, args.layers, n_nodes=args.nodes, multiplier=args.multiplier)
+            self.v_model.set_weights(self.model.get_weights())
         self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)#, weight_decay=1e-3)
 
-    def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
+    def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled, epoch):
         """Method performing one architecture optimization step
 
         Args:
@@ -48,17 +49,31 @@ class Architect():
             # Perform unrolled step by approximating weights with one training step
             grads_normal, grads_reduce = self._backward_step_unrolled(x_train, y_train, x_valid, y_valid, xi, net_optimizer)
         else:
-            # Don't approximate weights with training step and just calculate gradients
-            with tf.GradientTape(persistent=True) as gt:
-                gt.watch(self.model.alphas_normal)
-                gt.watch(self.model.alphas_reduce)
-                loss = self._backward_step(x_valid, y_valid)
-            grads_normal = gt.gradient(loss, self.model.alphas_normal)
-            grads_reduce = gt.gradient(loss, self.model.alphas_reduce)
+            grads_normal, grads_reduce = self._backward_step(x_valid, y_valid, xi, epoch)
         # Apply weight decay
         self.model.alphas_normal.assign_sub(self.model.alphas_normal * 1e-3 * xi)
         self.model.alphas_reduce.assign_sub(self.model.alphas_reduce * 1e-3 * xi)
         self.optimizer.apply_gradients(zip([grads_normal, grads_reduce], [self.model.alphas_normal, self.model.alphas_reduce]))
+
+    def _mlc_loss(self, arch_params):
+        params = tf.concat(arch_params, 0)
+        neg_loss = tf.math.reduce_logsumexp(arch_params, axis=-1)
+        aux_loss = tf.reduce_mean(neg_loss)
+        return aux_loss
+
+    def _backward_step(self, x_valid, y_valid, xi, epoch):
+        weights = 0 + 50*epoch/100
+        ssr_normal = self._mlc_loss(self.model.arch_params())
+
+
+        with tf.GradientTape() as gt:
+            gt.watch(self.model.alphas_normal)
+            gt.watch(self.model.alphas_reduce)
+            loss = self.model._loss(x_valid, y_valid)
+            loss = loss + weights*ssr_normal
+
+        grads_normal, grads_reduce = gt.gradient(loss, [self.model.alphas_normal, self.model.alphas_reduce])
+        return grads_normal, grads_reduce
 
     def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
         """Method which performs one step unrolled optimization step
@@ -171,6 +186,3 @@ class Architect():
         # Synchornize architecture weights
         for idx, a in enumerate(self.model._arch_params):
             self.v_model._arch_params[idx].assign(a)
-
-    def _backward_step(self, input_valid, target_valid):
-        return self.model._loss(input_valid, target_valid, training=True)
