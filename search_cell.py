@@ -50,8 +50,8 @@ def train_step(x_batch_train, y_batch_train):
     return loss
 
 @tf.function
-def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, epoch):
-    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled, epoch=epoch)
+def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
+    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
 
 # This is function taken directly from keras implementation, since current
 # learning rate is needed and in tf-2.8 it's not possible to get it from
@@ -135,11 +135,11 @@ for epoch in range(config.args.epochs):
     # Training
     for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
         # First build the model
-        if epoch == 0 and step == 0 and config.args.unrolled:
-            architect.v_model.build((config.args.batch_size, 32, 32, 3))
+        if epoch == 0 and step == 0:
+            architect.v_model._loss(x_batch_valid, y_batch_valid)
 
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
-        architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, epoch)
+        architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
         loss = train_step(x_batch_train, y_batch_train)
         lr_step += 1
 

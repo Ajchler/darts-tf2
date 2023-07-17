@@ -31,7 +31,7 @@ class Config:
         parser.add_argument('--batch_size', type=int, default=64, help='batch size')
         parser.add_argument('--epochs', type=int, default=50, help='number of epochs')
         parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for architecture')
-        parser.add_argument('--unrolled', action='store_true', default=False, help='use one step unrolled validation loss')
+        parser.add_argument('--unrolled', action='store_true', default=True, help='use one step unrolled validation loss')
         parser.add_argument('--cutout', action='store_true', default=False, help='use cutout on input images')
         parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
         parser.add_argument('--learning_rate_min', type=float, default=0.04, help='learning rate')
