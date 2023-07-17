@@ -24,17 +24,17 @@ LOG_DIR='./logs'
 tf.get_logger().setLevel('INFO')
 
 @tf.function
-def validation_step(x_batch_valid, y_batch_valid):
-    logits = model(x_batch_valid, training=False)
+def validation_step(x_batch_valid, y_batch_valid, epoch):
+    logits = model(x_batch_valid, epoch, training=False)
     loss = criterion(y_batch_valid, logits)
     validation_acc.update_state(y_batch_valid, logits)
     valid_loss.update_state(y_batch_valid, logits)
     return loss
 
 @tf.function
-def train_step(x_batch_train, y_batch_train):
+def train_step(x_batch_train, y_batch_train, epoch):
     with tf.GradientTape() as tape:
-        logits = model(x_batch_train, training=True)
+        logits = model(x_batch_train, epoch, training=True)
         loss = criterion(y_batch_train, logits)
 
     grads = tape.gradient(loss, model.trainable_weights)
@@ -50,8 +50,8 @@ def train_step(x_batch_train, y_batch_train):
     return loss
 
 @tf.function
-def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid):
-    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled)
+def architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, epoch):
+    architect.step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, xi=lr, net_optimizer=optimizer, unrolled=config.args.unrolled, epoch=epoch)
 
 # This is function taken directly from keras implementation, since current
 # learning rate is needed and in tf-2.8 it's not possible to get it from
@@ -98,7 +98,8 @@ criterion = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 optimizer = keras.optimizers.SGD(learning_rate=lr_scheduler, momentum=config.args.momentum)
 
 # Create a model and an architect
-model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier)
+model = Network(config.args.init_channels, criterion, 10, config.args.layers, n_nodes=config.args.nodes, multiplier=config.args.multiplier,
+                auxiliary_skip=True, auxiliary_op='skip_connect')
 architect = Architect(model, config.args, criterion)
 
 # Setup tensorboard
@@ -136,10 +137,10 @@ for epoch in range(config.args.epochs):
     for step, ((x_batch_train, y_batch_train), (x_batch_valid, y_batch_valid)) in enumerate(zip(train_dataset, val_dataset)):
         # First build the model
         if epoch == 0 and step == 0:
-            architect.v_model._loss(x_batch_valid, y_batch_valid)
+            architect.v_model._loss(x_batch_valid, y_batch_valid, epoch)
 
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
-        architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid)
+        architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, epoch)
         loss = train_step(x_batch_train, y_batch_train)
         lr_step += 1
 

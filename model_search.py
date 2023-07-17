@@ -22,11 +22,15 @@ from operations import * # Comment out this line if any of the next two imports 
 import tensorflow as tf
 import tensorflow.keras as keras
 
+def _linear_decay(epoch):
+    return 1.0 * ((50 - epoch) / 50)
+
+
 class MixedOp(keras.layers.Layer):
     """Class for mixed operations between hidden states
 
     """
-    def __init__(self, C_curr, stride):
+    def __init__(self, C_curr, stride, auxiliary_skip, auxiliary_op):
         """Mixed operation initialization method
 
         Args:
@@ -36,22 +40,31 @@ class MixedOp(keras.layers.Layer):
         super().__init__()
         self.stride = stride
         self._ops = []
+
+        if auxiliary_skip:
+            if self.stride[0] == 2:
+                self.aux_op = FactorizedReduce(C_curr)
+            elif auxiliary_op == 'skip_connect':
+                self.aux_op = Identity()
+
         # Initialize all operations from primitives
         for prim in PRIMITIVES:
             op = OP_DICT[prim](C_curr, stride, True)
             self._ops.append(op)
 
-    def call(self, x, weights, training=None):
+    def call(self, x, weights, epoch, training=None):
         weights = tf.reshape(weights, [len(PRIMITIVES), 1, 1, 1, 1])
         ops = [op(x, training) for op in self._ops]
         # Mix operations output, each operation is multiplied by corresponding weight
-        return tf.reduce_sum(ops * weights, axis=0)
+        res = tf.reduce_sum(ops * weights, axis=0)
+        res += self.aux_op(x, training) * _linear_decay(epoch)
+        return res
 
 class Cell(keras.layers.Layer):
     """Class representing a cell which are stacked to form a network
 
     """
-    def __init__(self, n_nodes, multiplier, C_curr, reduction, reduction_prev):
+    def __init__(self, n_nodes, multiplier, C_curr, reduction, reduction_prev, auxiliary_skip, auxiliary_op):
         """Cell initialization method
 
         Args:
@@ -77,9 +90,9 @@ class Cell(keras.layers.Layer):
         for i in range(self._n_nodes):
             for j in range (i + 2):
                 stride = [2,2] if reduction and j < 2 else [1,1]
-                self._ops.append(MixedOp(C_curr, stride))
+                self._ops.append(MixedOp(C_curr, stride, auxiliary_skip, auxiliary_op))
 
-    def call(self, s0, s1, weights, training=None):
+    def call(self, s0, s1, weights, epoch, training=None):
         """Cell forward pass method
 
         Args:
@@ -97,7 +110,7 @@ class Cell(keras.layers.Layer):
         states = [s0, s1]
         offset = 0
         for i in range(self._n_nodes):
-            s = tf.math.add_n(self._ops[offset + j](h, weights[offset + j], training) for j, h in enumerate(states))
+            s = tf.math.add_n(self._ops[offset + j](h, weights[offset + j], epoch, training) for j, h in enumerate(states))
             offset += len(states)
             states.append(s)
 
@@ -108,7 +121,7 @@ class Network(keras.Model):
     """Class for model which is used for searching the search space
 
     """
-    def __init__(self, C, criterion, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3):
+    def __init__(self, C, criterion, n_classes, n_layers, n_nodes=4, multiplier=4, stem_multiplier=3, auxiliary_skip=False, auxiliary_op=None):
         """Network initialization method
 
         Args:
@@ -145,7 +158,7 @@ class Network(keras.Model):
             else:
                 reduction = False
 
-            cell = Cell(n_nodes, multiplier, C_curr, reduction, reduction_prev)
+            cell = Cell(n_nodes, multiplier, C_curr, reduction, reduction_prev, auxiliary_skip, auxiliary_op)
             reduction_prev = reduction
             self.cells.append(cell)
 
@@ -154,7 +167,7 @@ class Network(keras.Model):
 
         self._initialize_alphas()
 
-    def call(self, x, training=None):
+    def call(self, x, epoch, training=None):
         """Forward pass method
 
         Args:
@@ -172,12 +185,12 @@ class Network(keras.Model):
                 weights = tf.nn.softmax(self.alphas_reduce, axis=-1)
             else:
                 weights = tf.nn.softmax(self.alphas_normal, axis=-1)
-            s0, s1 = s1, cell(s0, s1, weights)
+            s0, s1 = s1, cell(s0, s1, weights, epoch)
         out = self.global_pooling(s1)
         logits = self.classifier(out)
         return logits
 
-    def _loss(self, x, target, training=False):
+    def _loss(self, x, target, epoch, training=False):
         """Method to calculate model loss using loss function specified during initalization
 
         Args:
@@ -188,7 +201,7 @@ class Network(keras.Model):
         Returns:
             Loss value
         """
-        logits = self(x, training=training)
+        logits = self(x, epoch, training=training)
         return self._criterion(target, logits)
 
     def _initialize_alphas(self):
