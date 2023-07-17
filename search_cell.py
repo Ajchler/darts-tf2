@@ -34,7 +34,7 @@ def validation_step(x_batch_valid, y_batch_valid):
 @tf.function
 def train_step(x_batch_train, y_batch_train):
     with tf.GradientTape() as tape:
-        logits = model(x_batch_train, update_type="weights", training=True)
+        logits = model(x_batch_train, training=True)
         loss = criterion(y_batch_train, logits)
 
     grads = tape.gradient(loss, model.trainable_weights)

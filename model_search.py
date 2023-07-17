@@ -154,7 +154,7 @@ class Network(keras.Model):
 
         self._initialize_alphas()
 
-    def call(self, x, update_type="alpha", training=None):
+    def call(self, x, training=None):
         """Forward pass method
 
         Args:
@@ -168,16 +168,10 @@ class Network(keras.Model):
         op = self.stem_2(op)
         s0 = s1 = op
         for i, cell in enumerate(self.cells):
-            if update_type == "alpha":
-                if cell.reduction:
-                    weights = tf.nn.softmax(self.alphas_reduce, axis=-1)
-                else:
-                    weights = tf.nn.softmax(self.alphas_normal, axis=-1)
-            elif update_type == "weights":
-                if cell.reduction:
-                    weights = self.alphas_reduce
-                else:
-                    weights = self.alphas_normal
+            if cell.reduction:
+                weights = tf.nn.softmax(self.alphas_reduce, axis=-1)
+            else:
+                weights = tf.nn.softmax(self.alphas_normal, axis=-1)
             s0, s1 = s1, cell(s0, s1, weights)
         out = self.global_pooling(s1)
         logits = self.classifier(out)
