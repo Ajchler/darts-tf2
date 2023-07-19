@@ -141,7 +141,7 @@ for epoch in range(config.args.epochs):
 
         lr = tf.cast(current_lr(lr_step, decay_steps, config.args.learning_rate_min, config.args.learning_rate), tf.float32)
         architect_step(x_batch_train, y_batch_train, x_batch_valid, y_batch_valid, epoch)
-        loss = train_step(x_batch_train, y_batch_train)
+        loss = train_step(x_batch_train, y_batch_train, epoch)
         lr_step += 1
 
         if (step + 1) % 100 == 0:
@@ -161,7 +161,7 @@ for epoch in range(config.args.epochs):
 
     # Validation
     for step, (x_batch_valid, y_batch_valid) in enumerate(val_dataset):
-        loss = validation_step(x_batch_valid, y_batch_valid)
+        loss = validation_step(x_batch_valid, y_batch_valid, epoch)
         if (step + 1) % 100 == 0:
             print(datetime.datetime.now())
             print(f'Epoch: {epoch + 1}')
