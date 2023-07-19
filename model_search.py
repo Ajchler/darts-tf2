@@ -22,10 +22,6 @@ from operations import * # Comment out this line if any of the next two imports 
 import tensorflow as tf
 import tensorflow.keras as keras
 
-def _linear_decay(epoch):
-    return 1.0 * ((50 - epoch) / 50)
-
-
 class MixedOp(keras.layers.Layer):
     """Class for mixed operations between hidden states
 
@@ -52,12 +48,12 @@ class MixedOp(keras.layers.Layer):
             op = OP_DICT[prim](C_curr, stride, True)
             self._ops.append(op)
 
-    def call(self, x, weights, epoch, training=None):
+    def call(self, x, weights, aux_decay, training=None):
         weights = tf.reshape(weights, [len(PRIMITIVES), 1, 1, 1, 1])
         ops = [op(x, training) for op in self._ops]
         # Mix operations output, each operation is multiplied by corresponding weight
         res = tf.reduce_sum(ops * weights, axis=0)
-        res += self.aux_op(x, training) * _linear_decay(epoch)
+        res += self.aux_op(x, training) * aux_decay
         return res
 
 class Cell(keras.layers.Layer):
@@ -92,7 +88,7 @@ class Cell(keras.layers.Layer):
                 stride = [2,2] if reduction and j < 2 else [1,1]
                 self._ops.append(MixedOp(C_curr, stride, auxiliary_skip, auxiliary_op))
 
-    def call(self, s0, s1, weights, epoch, training=None):
+    def call(self, s0, s1, weights, aux_decay, training=None):
         """Cell forward pass method
 
         Args:
@@ -110,7 +106,7 @@ class Cell(keras.layers.Layer):
         states = [s0, s1]
         offset = 0
         for i in range(self._n_nodes):
-            s = tf.math.add_n(self._ops[offset + j](h, weights[offset + j], epoch, training) for j, h in enumerate(states))
+            s = tf.math.add_n(self._ops[offset + j](h, weights[offset + j], aux_decay, training) for j, h in enumerate(states))
             offset += len(states)
             states.append(s)
 
@@ -140,6 +136,7 @@ class Network(keras.Model):
         self._n_nodes = n_nodes
         self._multiplier = multiplier
         self._criterion = criterion
+        self._aux_decay = 0
 
         # Stem stage
         C_curr = C * stem_multiplier
@@ -167,7 +164,7 @@ class Network(keras.Model):
 
         self._initialize_alphas()
 
-    def call(self, x, epoch, training=None):
+    def call(self, x, training=None):
         """Forward pass method
 
         Args:
@@ -185,12 +182,12 @@ class Network(keras.Model):
                 weights = tf.nn.softmax(self.alphas_reduce, axis=-1)
             else:
                 weights = tf.nn.softmax(self.alphas_normal, axis=-1)
-            s0, s1 = s1, cell(s0, s1, weights, epoch)
+            s0, s1 = s1, cell(s0, s1, weights, self._aux_decay, training)
         out = self.global_pooling(s1)
         logits = self.classifier(out)
         return logits
 
-    def _loss(self, x, target, epoch, training=False):
+    def _loss(self, x, target, training=False):
         """Method to calculate model loss using loss function specified during initalization
 
         Args:
@@ -201,7 +198,7 @@ class Network(keras.Model):
         Returns:
             Loss value
         """
-        logits = self(x, epoch, training=training)
+        logits = self(x, training=training)
         return self._criterion(target, logits)
 
     def _initialize_alphas(self):

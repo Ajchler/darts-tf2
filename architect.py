@@ -32,7 +32,7 @@ class Architect():
         self.v_model.set_weights(self.model.get_weights())
         self.optimizer = keras.optimizers.Adam(learning_rate=args.arch_learning_rate, beta_1=0.5, beta_2=0.999)#, weight_decay=1e-3)
 
-    def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled, epoch):
+    def step(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, unrolled):
         """Method performing one architecture optimization step
 
         Args:
@@ -46,7 +46,7 @@ class Architect():
         """
         if unrolled:
             # Perform unrolled step by approximating weights with one training step
-            grads_normal, grads_reduce = self._backward_step_unrolled(x_train, y_train, x_valid, y_valid, xi, net_optimizer, epoch)
+            grads_normal, grads_reduce = self._backward_step_unrolled(x_train, y_train, x_valid, y_valid, xi, net_optimizer)
         else:
             # Don't approximate weights with training step and just calculate gradients
             with tf.GradientTape(persistent=True) as gt:
@@ -60,7 +60,7 @@ class Architect():
         self.model.alphas_reduce.assign_sub(self.model.alphas_reduce * 1e-3 * xi)
         self.optimizer.apply_gradients(zip([grads_normal, grads_reduce], [self.model.alphas_normal, self.model.alphas_reduce]))
 
-    def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer, epoch):
+    def _backward_step_unrolled(self, x_train, y_train, x_valid, y_valid, xi, net_optimizer):
         """Method which performs one step unrolled optimization step
 
         Args:
@@ -74,12 +74,12 @@ class Architect():
         Returns:
             Gradients for normal and reduction cell architectures
         """
-        self._virtual_step(x_train, y_train, xi, net_optimizer, epoch)
+        self._virtual_step(x_train, y_train, xi, net_optimizer)
 
         with tf.GradientTape() as gt:
             gt.watch(self.v_model.alphas_normal)
             gt.watch(self.v_model.alphas_reduce)
-            loss = self.v_model._loss(x_valid, y_valid, epoch)
+            loss = self.v_model._loss(x_valid, y_valid)
 
         variables = self.v_model.trainable_weights
         variables.append(self.v_model.alphas_normal)
@@ -89,7 +89,7 @@ class Architect():
         dalpha = v_grads[-2:] # Architecture weights gradients
         dw = v_grads[:-2] # Layers weights gradients
 
-        hess = self.calc_hessian(dw, x_train, y_train, epoch)
+        hess = self.calc_hessian(dw, x_train, y_train)
         hess_normal, hess_reduce = tf.split(hess, num_or_size_splits=2, axis=0)
 
         # Compute gradients
@@ -98,7 +98,7 @@ class Architect():
 
         return [grads_normal, grads_reduce]
 
-    def calc_hessian(self, dw, x_train, y_train, epoch):
+    def calc_hessian(self, dw, x_train, y_train):
         """Calculate hessian for architecture weights
 
         Args:
@@ -120,7 +120,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train, epoch, training=True)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_positive_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_positive_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -131,7 +131,7 @@ class Architect():
         with tf.GradientTape(persistent=True) as gt:
             gt.watch(self.model.alphas_normal)
             gt.watch(self.model.alphas_reduce)
-            loss = self.model._loss(x_train, y_train, epoch, training=True)
+            loss = self.model._loss(x_train, y_train, training=True)
         dalpha_negative_norm = gt.gradient(loss, self.model.alphas_normal)
         dalpha_negative_red = gt.gradient(loss, self.model.alphas_reduce)
 
@@ -146,7 +146,7 @@ class Architect():
         hess = tf.math.divide(tf.math.subtract(dalpha_positive, dalpha_negative), tf.math.multiply(2., eps))
         return hess
 
-    def _virtual_step(self, x_train, y_train, xi, net_optimizer, epoch):
+    def _virtual_step(self, x_train, y_train, xi, net_optimizer):
         """Method which manually performs one training step and updates virtual model weights
 
         Args:
@@ -156,7 +156,7 @@ class Architect():
             net_optimizer : Optimizer for regular layer weights
         """
         with tf.GradientTape() as gt:
-            loss = self.model._loss(x_train, y_train, epoch, training=True)
+            loss = self.model._loss(x_train, y_train, training=True)
         grads = gt.gradient(loss, self.model.trainable_weights)
 
         # Get optimizer weights
@@ -172,5 +172,5 @@ class Architect():
         for idx, a in enumerate(self.model._arch_params):
             self.v_model._arch_params[idx].assign(a)
 
-    def _backward_step(self, input_valid, target_valid, epoch):
-        return self.model._loss(input_valid, target_valid, epoch, training=True)
+    def _backward_step(self, input_valid, target_valid):
+        return self.model._loss(input_valid, target_valid, training=True)
