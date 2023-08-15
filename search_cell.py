@@ -22,6 +22,7 @@ import datetime
 LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
+tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True)
 
 def linear_decay(epoch):
     return 1.0 * ((50 - epoch) / 50)
