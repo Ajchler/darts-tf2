@@ -115,10 +115,6 @@ class SepConv(keras.layers.Layer):
         self.dw = keras.layers.DepthwiseConv2D(kernel_size, stride, padding='same')
         self.pw = keras.layers.Conv2D(C_curr, 1, padding='same')
         self.bn = keras.layers.BatchNormalization()
-        self.relu2 = keras.layers.ReLU()
-        self.dw2 = keras.layers.DepthwiseConv2D(kernel_size, 1, padding='same')
-        self.pw2 = keras.layers.Conv2D(C_curr, 1, padding='same')
-        self.bn2 = keras.layers.BatchNormalization()
 
     def call(self, x, training=None):
         """Forward pass method
@@ -134,10 +130,6 @@ class SepConv(keras.layers.Layer):
         x = self.dw(x)
         x = self.pw(x)
         x = self.bn(x)
-        x = self.relu2(x)
-        x = self.dw2(x)
-        x = self.pw2(x)
-        x = self.bn2(x)
         return x
 
 class Identity(keras.layers.Layer):
