@@ -23,6 +23,8 @@ LOG_DIR='./logs'
 
 tf.get_logger().setLevel('INFO')
 
+tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True)
+
 @tf.function
 def validation_step(x_batch_valid, y_batch_valid):
     logits = model(x_batch_valid, training=False)
